@@ -37,7 +37,7 @@ export const propertySchema = z.object({
   rooms: z.number().min(1).max(50).optional(),
   bedrooms: z.number().min(0).max(30).optional(),
   bathrooms: z.number().min(0).max(20).optional(),
-  floor: z.number().min(-2, 'Piano minimo: -2 (seminterrato)').max(100).optional(),
+  floor: z.number().min(0, 'Il piano minimo consentito è 0').max(100).optional(),
   totalFloors: z.number().min(1).max(150).optional(),
 
   // Booleani

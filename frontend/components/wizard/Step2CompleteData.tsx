@@ -325,7 +325,7 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
                 id="floor"
                 type="number"
                 placeholder="2"
-                min="-2"
+                min="0"
                 {...register('floor', { valueAsNumber: true })}
                 className={errors.floor ? 'border-red-500' : ''}
               />
