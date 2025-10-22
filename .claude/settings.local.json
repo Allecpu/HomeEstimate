@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-next-app@latest:*)",
+      "Bash(mkdir:*)",
+      "Bash(npm install:*)",
+      "Bash(npx shadcn@latest init:*)",
+      "Bash(npx shadcn@latest add:*)",
+      "Bash(npm run dev:*)",
+      "Bash(timeout:*)",
+      "Bash(dir)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(curl:*)",
+      "Bash(.venvScriptspython.exe -c \"import sys; print(sys.executable)\")",
+      "Bash(./venv/Scripts/python.exe:*)",
+      "Bash(./venv/Scripts/pip.exe install:*)",
+      "Bash(./venv/Scripts/pip.exe:*)",
+      "Bash(dir \"C:\\Github\\HomeEstimate\\backend\\venv\\Lib\\site-packages\")",
+      "Bash(C:/Python313/python.exe -m venv venv)",
+      "Bash(taskkill:*)",
+      "Bash(node -e:*)",
+      "Bash(node test-validation.js:*)",
+      "Bash(node test-characteristics.js:*)",
+      "Bash(node test-completeness.js:*)",
+      "Bash(node test-nan.js:*)",
+      "Bash(cat:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
