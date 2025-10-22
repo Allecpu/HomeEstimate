@@ -108,8 +108,26 @@ export function getMissingFields(data: Partial<PropertyFormData>): string[] {
   const missing: string[] = [];
 
   for (const field of requiredFields) {
-    if (!data[field]) {
-      missing.push(field);
+    const value = data[field];
+
+    const isMissing = (() => {
+      if (value === null || value === undefined) {
+        return true;
+      }
+
+      if (typeof value === 'string') {
+        return value.trim().length === 0;
+      }
+
+      if (typeof value === 'number') {
+        return Number.isNaN(value);
+      }
+
+      return false;
+    })();
+
+    if (isMissing) {
+      missing.push(field as string);
     }
   }
 

@@ -1,14 +1,13 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import React, { useEffect } from 'react';
+import { useForm, Controller, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertCircle, CheckCircle2, Home } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { propertySchema, type PropertyFormData, getMissingFields, calculateDataCompleteness } from '@/lib/validation';
 import { Progress } from '@/components/ui/progress';
 
@@ -54,7 +53,6 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
   const {
     register,
     handleSubmit,
-    watch,
     control,
     reset,
     formState: { errors },
@@ -120,7 +118,8 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
     return isNaN(num) ? undefined : num;
   };
 
-  const formData = watch();
+  const watchedFormData = useWatch({ control }) as Partial<PropertyFormData> | undefined;
+  const formData: Partial<PropertyFormData> = watchedFormData ?? {};
 
   // Debug: log form data to see what's happening
   console.log('Form Data:', formData);
