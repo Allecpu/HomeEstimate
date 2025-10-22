@@ -1,14 +1,13 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { useForm, Controller, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertCircle, CheckCircle2, Home } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { propertySchema, type PropertyFormData, getMissingFields, calculateDataCompleteness } from '@/lib/validation';
 import { Progress } from '@/components/ui/progress';
 
@@ -19,42 +18,89 @@ interface Step2Props {
 }
 
 export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
-  // Debug initialData
-  console.log('🔍 RAW initialData keys:', initialData ? Object.keys(initialData) : 'none');
-  if (initialData) {
-    console.log('🔍 totalFloors in initialData:', 'totalFloors' in initialData, 'value:', initialData.totalFloors);
-    console.log('🔍 yearBuilt in initialData:', 'yearBuilt' in initialData, 'value:', initialData.yearBuilt);
-  }
+  const toNumber = (value: unknown): number | undefined => {
+    if (value === null || value === undefined || value === '') {
+      return undefined;
+    }
 
-  // Helper to safely convert to number, avoiding NaN
-  const toNumber = (value: any): number | undefined => {
-    if (value === null || value === undefined || value === '') return undefined;
-    const num = typeof value === 'string' ? parseFloat(value) : value;
-    const result = typeof num === 'number' && !isNaN(num) ? num : undefined;
-    return result;
+    if (typeof value === 'number') {
+      return Number.isFinite(value) ? value : undefined;
+    }
+
+    if (typeof value === 'string') {
+      const normalised = value.replace(/\./g, '').replace(',', '.');
+      if (normalised.trim().length === 0) {
+        return undefined;
+      }
+
+      const parsed = Number(normalised);
+      return Number.isFinite(parsed) ? parsed : undefined;
+    }
+
+    return undefined;
   };
 
-  // Convert string values to numbers for numeric fields - explicitly map only known fields
-  const processedData: Partial<PropertyFormData> = {};
-  if (initialData) {
-    if (initialData.address) processedData.address = initialData.address;
-    if (initialData.city) processedData.city = initialData.city;
-    if (initialData.surface !== undefined) processedData.surface = toNumber(initialData.surface);
-    if (initialData.price !== undefined) processedData.price = toNumber(initialData.price);
-    if (initialData.rooms !== undefined) processedData.rooms = toNumber(initialData.rooms);
-    if (initialData.bedrooms !== undefined) processedData.bedrooms = toNumber(initialData.bedrooms);
-    if (initialData.bathrooms !== undefined) processedData.bathrooms = toNumber(initialData.bathrooms);
-    if (initialData.floor !== undefined) processedData.floor = toNumber(initialData.floor);
-    if (initialData.totalFloors !== undefined) processedData.totalFloors = toNumber(initialData.totalFloors);
-    if (initialData.yearBuilt !== undefined) processedData.yearBuilt = toNumber(initialData.yearBuilt);
-  }
+  const processedData = useMemo(() => {
+    if (!initialData) {
+      return {} as Partial<PropertyFormData>;
+    }
 
-  console.log('🔍 processedData:', processedData);
+    const result: Partial<PropertyFormData> = {};
+
+    if (initialData.address !== undefined) {
+      result.address = initialData.address;
+    }
+
+    if (initialData.city !== undefined) {
+      result.city = initialData.city;
+    }
+
+    const surface = toNumber(initialData.surface);
+    if (surface !== undefined) {
+      result.surface = surface;
+    }
+
+    const price = toNumber(initialData.price);
+    if (price !== undefined) {
+      result.price = price;
+    }
+
+    const rooms = toNumber(initialData.rooms);
+    if (rooms !== undefined) {
+      result.rooms = rooms;
+    }
+
+    const bedrooms = toNumber(initialData.bedrooms);
+    if (bedrooms !== undefined) {
+      result.bedrooms = bedrooms;
+    }
+
+    const bathrooms = toNumber(initialData.bathrooms);
+    if (bathrooms !== undefined) {
+      result.bathrooms = bathrooms;
+    }
+
+    const floor = toNumber(initialData.floor);
+    if (floor !== undefined) {
+      result.floor = floor;
+    }
+
+    const totalFloors = toNumber(initialData.totalFloors);
+    if (totalFloors !== undefined) {
+      result.totalFloors = totalFloors;
+    }
+
+    const yearBuilt = toNumber(initialData.yearBuilt);
+    if (yearBuilt !== undefined) {
+      result.yearBuilt = yearBuilt;
+    }
+
+    return result;
+  }, [initialData]);
 
   const {
     register,
     handleSubmit,
-    watch,
     control,
     reset,
     formState: { errors },
@@ -64,98 +110,63 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
   });
 
   // Update form when initialData changes (e.g., from extension)
+  const processedDataSignature = useMemo(
+    () => JSON.stringify(processedData),
+    [processedData]
+  );
+
+  const lastAppliedSignatureRef = useRef<string>();
+
   useEffect(() => {
-    console.log('useEffect triggered, initialData:', initialData);
-    if (initialData && Object.keys(initialData).length > 0) {
-      const updatedData: any = {};
-
-      if (initialData.address) updatedData.address = initialData.address;
-      if (initialData.city) updatedData.city = initialData.city;
-
-      const surface = toNumber(initialData.surface);
-      if (surface !== undefined) updatedData.surface = surface;
-
-      const price = toNumber(initialData.price);
-      if (price !== undefined) updatedData.price = price;
-
-      const rooms = toNumber(initialData.rooms);
-      if (rooms !== undefined) updatedData.rooms = rooms;
-
-      const bedrooms = toNumber(initialData.bedrooms);
-      if (bedrooms !== undefined) updatedData.bedrooms = bedrooms;
-
-      const bathrooms = toNumber(initialData.bathrooms);
-      if (bathrooms !== undefined) updatedData.bathrooms = bathrooms;
-
-      const floor = toNumber(initialData.floor);
-      if (floor !== undefined) updatedData.floor = floor;
-
-      const totalFloors = toNumber(initialData.totalFloors);
-      if (totalFloors !== undefined) updatedData.totalFloors = totalFloors;
-
-      const yearBuilt = toNumber(initialData.yearBuilt);
-      if (yearBuilt !== undefined) updatedData.yearBuilt = yearBuilt;
-
-      console.log('🔍 Calling reset() with updatedData:', updatedData);
-      console.log('🔍 updatedData has totalFloors?', 'totalFloors' in updatedData);
-      console.log('🔍 updatedData has yearBuilt?', 'yearBuilt' in updatedData);
-      reset(updatedData);
-      console.log('reset() called successfully');
+    if (!initialData || Object.keys(initialData).length === 0) {
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(initialData), reset]);
+
+    if (processedDataSignature === lastAppliedSignatureRef.current) {
+      return;
+    }
+
+    lastAppliedSignatureRef.current = processedDataSignature;
+    reset(processedData);
+  }, [initialData, processedData, processedDataSignature, reset]);
 
   // Format number with Italian thousands separator
   const formatPrice = (value: number | string | undefined): string => {
-    if (!value) return '';
-    const num = typeof value === 'string' ? parseFloat(value.replace(/\./g, '')) : value;
-    if (isNaN(num)) return '';
-    return num.toLocaleString('it-IT');
+    if (value === null || value === undefined || value === '') {
+      return '';
+    }
+
+    const numericValue = toNumber(value);
+    return numericValue === undefined ? '' : numericValue.toLocaleString('it-IT');
   };
 
   // Parse formatted price back to number
   const parsePrice = (value: string): number | undefined => {
     if (!value) return undefined;
-    const num = parseFloat(value.replace(/\./g, '').replace(',', '.'));
-    return isNaN(num) ? undefined : num;
+    return toNumber(value);
   };
 
-  const formData = watch();
+  const watchedFormData = useWatch({ control }) as Partial<PropertyFormData> | undefined;
+  const formData: Partial<PropertyFormData> = watchedFormData ?? {};
+  const effectiveFormData: Partial<PropertyFormData> = {
+    ...processedData,
+    ...formData,
+  };
 
-  // Debug: log form data to see what's happening
-  console.log('Form Data:', formData);
-  console.log('Missing Fields Check:', {
-    address: formData.address,
-    city: formData.city,
-    surface: formData.surface
-  });
-
-  const missingFields = getMissingFields(formData);
-  const completeness = calculateDataCompleteness(formData);
-
-  console.log('Missing Fields:', missingFields);
-  console.log('Completeness:', completeness);
+  const missingFields = getMissingFields(effectiveFormData);
+  const completeness = calculateDataCompleteness(effectiveFormData);
+  const progressValue = Math.min(100, Math.max(0, completeness));
 
   // Check if characteristics section is complete
   const characteristicsFields = ['rooms', 'bedrooms', 'bathrooms', 'floor', 'totalFloors', 'yearBuilt'];
   const isCharacteristicsComplete = characteristicsFields.every(field => {
-    const value = formData[field as keyof PropertyFormData];
+    const value = effectiveFormData[field as keyof PropertyFormData];
     // For numbers, check if it's a valid number (not undefined, null, NaN, or empty string)
     if (typeof value === 'number') {
       return !isNaN(value);
     }
     return value !== undefined && value !== null && value !== '';
   });
-
-  console.log('Characteristics values:', {
-    rooms: formData.rooms,
-    bedrooms: formData.bedrooms,
-    bathrooms: formData.bathrooms,
-    floor: formData.floor,
-    totalFloors: formData.totalFloors,
-    yearBuilt: formData.yearBuilt,
-  });
-  console.log('isCharacteristicsComplete:', isCharacteristicsComplete);
 
   const onSubmit = (data: PropertyFormData) => {
     onNext(data);
@@ -177,13 +188,13 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
               </CardDescription>
             </div>
             <div className="text-right">
-              <p className="text-2xl font-bold text-blue-600">{completeness}%</p>
+              <p className="text-2xl font-bold text-blue-600">{progressValue}%</p>
               <p className="text-xs text-gray-500">Completezza</p>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <Progress value={completeness} className="h-2" />
+          <Progress value={progressValue} className="h-2" />
         </CardContent>
       </Card>
 
@@ -342,15 +353,12 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
                 placeholder="5"
                 min="0"
                 {...register('totalFloors', {
-                  setValueAs: (v) => {
-                    console.log('✏️ totalFloors setValueAs input:', v, 'type:', typeof v);
-                    if (v === '' || v === null || v === undefined) return undefined;
-                    const num = Number(v);
-                    console.log('✏️ totalFloors parsed:', num, 'isNaN:', isNaN(num));
-                    if (isNaN(num) || num < 0) return undefined;
-                    const result = Math.floor(num);
-                    console.log('✏️ totalFloors result:', result);
-                    return result;
+                  setValueAs: (value) => {
+                    const parsed = toNumber(value);
+                    if (parsed === undefined || parsed < 0) {
+                      return undefined;
+                    }
+                    return Math.floor(parsed);
                   }
                 })}
               />
@@ -365,16 +373,17 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
                 min="1800"
                 max={new Date().getFullYear()}
                 {...register('yearBuilt', {
-                  setValueAs: (v) => {
-                    console.log('✏️ yearBuilt setValueAs input:', v, 'type:', typeof v);
-                    if (v === '' || v === null || v === undefined) return undefined;
-                    const num = Number(v);
+                  setValueAs: (value) => {
+                    const parsed = toNumber(value);
                     const currentYear = new Date().getFullYear();
-                    console.log('✏️ yearBuilt parsed:', num, 'isNaN:', isNaN(num));
-                    if (isNaN(num) || num < 1800 || num > currentYear) return undefined;
-                    const result = Math.floor(num);
-                    console.log('✏️ yearBuilt result:', result);
-                    return result;
+                    if (
+                      parsed === undefined ||
+                      parsed < 1800 ||
+                      parsed > currentYear
+                    ) {
+                      return undefined;
+                    }
+                    return Math.floor(parsed);
                   }
                 })}
               />

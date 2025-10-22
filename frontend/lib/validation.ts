@@ -108,8 +108,26 @@ export function getMissingFields(data: Partial<PropertyFormData>): string[] {
   const missing: string[] = [];
 
   for (const field of requiredFields) {
-    if (!data[field]) {
-      missing.push(field);
+    const value = data[field];
+
+    const isMissing = (() => {
+      if (value === null || value === undefined) {
+        return true;
+      }
+
+      if (typeof value === 'string') {
+        return value.trim().length === 0;
+      }
+
+      if (typeof value === 'number') {
+        return Number.isNaN(value);
+      }
+
+      return false;
+    })();
+
+    if (isMissing) {
+      missing.push(field as string);
     }
   }
 
@@ -125,8 +143,6 @@ export function calculateDataCompleteness(data: Partial<PropertyFormData>): numb
   ];
 
   let filledCount = 0;
-
-  console.log('=== DEBUG COMPLETEZZA ===');
   allFields.forEach(field => {
     const value = data[field];
     let isFilled = false;
@@ -140,15 +156,11 @@ export function calculateDataCompleteness(data: Partial<PropertyFormData>): numb
       isFilled = !isNaN(value);
     }
 
-    console.log(`${field}: value="${value}", type=${typeof value}, isFilled=${isFilled}, isNaN=${typeof value === 'number' ? isNaN(value) : 'N/A'}`);
-
     if (isFilled) {
       filledCount++;
     }
   });
 
   const percentage = Math.round((filledCount / allFields.length) * 100);
-  console.log(`📊 Completezza: ${filledCount}/${allFields.length} = ${percentage}%`);
-
-  return percentage;
+  return Math.min(100, Math.max(0, percentage));
 }
