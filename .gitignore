@@ -47,3 +47,10 @@ coverage/
 *.tmp
 .cache/
 frontend/.git.backup/
+
+# NPM cache and config
+frontend/.npm-cache/
+frontend/.config/
+
+# Claude local settings
+.claude/settings.local.json
