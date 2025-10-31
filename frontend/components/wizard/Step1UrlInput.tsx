@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Link2, Loader2, AlertCircle, CheckCircle2, Download } from 'lucide-react';
@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { ImageGallery } from '@/components/wizard/ImageGallery';
 import { urlSchema, type UrlFormData } from '@/lib/validation';
 
 interface Step1Props {
@@ -21,6 +22,57 @@ export function Step1UrlInput({ onNext, initialUrl }: Step1Props) {
   const [parsedData, setParsedData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [extensionDataAvailable, setExtensionDataAvailable] = useState(false);
+
+  const parsedImages = useMemo(() => {
+    if (!parsedData || typeof parsedData !== 'object') {
+      return [] as Array<string | Record<string, unknown>>;
+    }
+
+    const source = parsedData as Record<string, unknown>;
+    const candidateKeys = [
+      'images',
+      'photos',
+      'gallery',
+      'galleryImages',
+      'imageUrls',
+      'image_urls',
+      'pictureUrls',
+    ];
+
+    const findArray = (target: Record<string, unknown> | undefined): unknown[] | null => {
+      if (!target) {
+        return null;
+      }
+
+      for (const key of candidateKeys) {
+        const value = target[key];
+        if (Array.isArray(value) && value.length > 0) {
+          return value;
+        }
+      }
+
+      return null;
+    };
+
+    const directArray = findArray(source);
+    if (directArray) {
+      return directArray as Array<string | Record<string, unknown>>;
+    }
+
+    const mediaValue = source['media'];
+    if (Array.isArray(mediaValue) && mediaValue.length > 0) {
+      return mediaValue as Array<string | Record<string, unknown>>;
+    }
+
+    if (mediaValue && typeof mediaValue === 'object') {
+      const nested = findArray(mediaValue as Record<string, unknown>);
+      if (nested) {
+        return nested as Array<string | Record<string, unknown>>;
+      }
+    }
+
+    return [] as Array<string | Record<string, unknown>>;
+  }, [parsedData]);
 
   const {
     register,
@@ -237,6 +289,10 @@ export function Step1UrlInput({ onNext, initialUrl }: Step1Props) {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {parsedData && parsedImages.length > 0 && (
+        <ImageGallery images={parsedImages} />
       )}
 
       {/* Errore */}
