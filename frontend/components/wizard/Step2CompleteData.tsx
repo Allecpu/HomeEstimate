@@ -142,6 +142,51 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
       result.yearBuilt = yearBuilt;
     }
 
+    // New fields added
+    if (initialData.province !== undefined) {
+      result.province = initialData.province;
+    }
+
+    if (initialData.postalCode !== undefined) {
+      result.postalCode = initialData.postalCode;
+    }
+
+    if (initialData.hasElevator !== undefined) {
+      result.hasElevator = initialData.hasElevator;
+    }
+
+    if (initialData.hasParking !== undefined) {
+      result.hasParking = initialData.hasParking;
+    }
+
+    if (initialData.hasBalcony !== undefined) {
+      result.hasBalcony = initialData.hasBalcony;
+    }
+
+    if (initialData.hasCellar !== undefined) {
+      result.hasCellar = initialData.hasCellar;
+    }
+
+    if (initialData.propertyType !== undefined) {
+      result.propertyType = initialData.propertyType;
+    }
+
+    if (initialData.state !== undefined) {
+      result.state = initialData.state;
+    }
+
+    if (initialData.energyClass !== undefined) {
+      result.energyClass = initialData.energyClass;
+    }
+
+    if (initialData.title !== undefined) {
+      result.title = initialData.title;
+    }
+
+    if (initialData.description !== undefined) {
+      result.description = initialData.description;
+    }
+
     return result;
   }, [initialData]);
 

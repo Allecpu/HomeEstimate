@@ -212,21 +212,48 @@ def parse_immobiliare(soup: BeautifulSoup, url: str) -> PropertyData:
     if price_elem:
         data.price = extract_number(price_elem.text)
 
-    # Address
-    address_elem = soup.select_one('[class*="address"], [class*="location"]')
+    # Address - try multiple selectors for Immobiliare.it
+    address_elem = soup.select_one('div.im-titleBlock__location, [class*="address"], [class*="location"], .re-title__location')
     if address_elem:
         address_text = address_elem.text.strip()
         data.address = address_text
 
-        # Try to extract city and postal code
+        # Try to extract city, province and postal code
+        # Format examples: "via del Pirich, Lesa (NO)" or "via Roma, 20121 Milano (MI)"
         if ',' in address_text:
             parts = [p.strip() for p in address_text.split(',')]
-            if len(parts) >= 2:
-                data.city = parts[-1]
 
-        postal_match = re.search(r'\b\d{5}\b', address_text)
-        if postal_match:
-            data.postalCode = postal_match.group()
+            # Last part may contain city and province: "Lesa (NO)" or "20121 Milano (MI)"
+            if len(parts) >= 2:
+                last_part = parts[-1]
+
+                # Extract province from parentheses: "(NO)" or "(MI)"
+                province_match = re.search(r'\(([A-Z]{2})\)', last_part)
+                if province_match:
+                    data.province = province_match.group(1)
+                    # Remove province from text: "Lesa (NO)" -> "Lesa"
+                    last_part = re.sub(r'\s*\([A-Z]{2}\)', '', last_part).strip()
+
+                # Extract postal code if present
+                postal_match = re.search(r'\b(\d{5})\b', last_part)
+                if postal_match:
+                    data.postalCode = postal_match.group(1)
+                    # Remove postal code from text: "20121 Milano" -> "Milano"
+                    last_part = re.sub(r'\b\d{5}\b', '', last_part).strip()
+
+                # What remains is the city
+                if last_part:
+                    data.city = last_part
+
+            # Also try to extract address from first part
+            if len(parts) >= 1 and not data.address:
+                data.address = parts[0]
+
+        # If no postal code found in address, search in whole text
+        if not data.postalCode:
+            postal_match = re.search(r'\b(\d{5})\b', address_text)
+            if postal_match:
+                data.postalCode = postal_match.group(1)
 
     # Description
     desc_elem = soup.select_one('[class*="description"]')
