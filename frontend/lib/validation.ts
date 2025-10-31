@@ -138,8 +138,18 @@ export function getMissingFields(data: Partial<PropertyFormData>): string[] {
 // Considera solo i campi effettivamente mostrati nel form
 export function calculateDataCompleteness(data: Partial<PropertyFormData>): number {
   const allFields: (keyof PropertyFormData)[] = [
+    // Campi obbligatori
     'address', 'city', 'surface', 'price',
-    'rooms', 'bedrooms', 'bathrooms', 'floor', 'totalFloors', 'yearBuilt'
+    // Caratteristiche
+    'rooms', 'bedrooms', 'bathrooms', 'floor', 'totalFloors', 'yearBuilt',
+    // Dotazioni e servizi (boolean)
+    'hasElevator', 'hasParking', 'hasBalcony', 'hasCellar',
+    // Tipologia e stato
+    'propertyType', 'state', 'energyClass',
+    // Localizzazione dettagliata
+    'province', 'postalCode',
+    // Informazioni aggiuntive
+    'title', 'description'
   ];
 
   let filledCount = 0;
@@ -154,6 +164,10 @@ export function calculateDataCompleteness(data: Partial<PropertyFormData>): numb
     // Numeri: devono essere validi (non NaN) e 0 è valido
     else if (typeof value === 'number') {
       isFilled = !isNaN(value);
+    }
+    // Boolean: true conta come compilato, false/undefined non conta
+    else if (typeof value === 'boolean') {
+      isFilled = value === true;
     }
 
     if (isFilled) {

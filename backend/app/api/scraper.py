@@ -19,17 +19,22 @@ class PropertyData(BaseModel):
     address: Optional[str] = None
     city: Optional[str] = None
     province: Optional[str] = None
+    postalCode: Optional[str] = None
     surface: Optional[float] = None
     rooms: Optional[int] = None
     bedrooms: Optional[int] = None
     bathrooms: Optional[int] = None
     floor: Optional[int] = None
+    totalFloors: Optional[int] = None
     hasElevator: Optional[bool] = None
     hasParking: Optional[bool] = None
     hasBalcony: Optional[bool] = None
+    hasCellar: Optional[bool] = None
+    propertyType: Optional[str] = None
+    state: Optional[str] = None
     energyClass: Optional[str] = None
     yearBuilt: Optional[int] = None
-    photos: list[str] = []
+    images: list[dict] = []
     source: Optional[str] = None
 
 async def fetch_url_with_playwright(url: str) -> str:
@@ -93,7 +98,19 @@ def parse_idealista(soup: BeautifulSoup, url: str) -> PropertyData:
     if not address_elem:
         address_elem = soup.select_one('[class*="address"]')
     if address_elem:
-        data.address = address_elem.text.strip()
+        address_text = address_elem.text.strip()
+        data.address = address_text
+
+        # Try to extract city from address
+        if ',' in address_text:
+            parts = [p.strip() for p in address_text.split(',')]
+            if len(parts) >= 2:
+                data.city = parts[-1]
+
+        # Try to extract postal code
+        postal_match = re.search(r'\b\d{5}\b', address_text)
+        if postal_match:
+            data.postalCode = postal_match.group()
 
     # Details from various sections
     details = soup.select('div.info-features span, [class*="details"] span, [class*="feature"] span')
@@ -109,16 +126,71 @@ def parse_idealista(soup: BeautifulSoup, url: str) -> PropertyData:
         elif 'bagno' in text or 'bagni' in text:
             data.bathrooms = int(extract_number(text) or 0)
         elif 'piano' in text and 'piani' not in text:
-            data.floor = int(extract_number(text) or 0)
+            floor_num = extract_number(text)
+            if floor_num is not None:
+                data.floor = int(floor_num)
+        elif 'piani edificio' in text or 'totale piani' in text:
+            total_floors = extract_number(text)
+            if total_floors is not None:
+                data.totalFloors = int(total_floors)
+        elif 'ascensore' in text:
+            data.hasElevator = True
+        elif 'box' in text or 'posto auto' in text or 'garage' in text:
+            data.hasParking = True
+        elif 'balcone' in text or 'terrazzo' in text or 'terrazza' in text:
+            data.hasBalcony = True
+        elif 'cantina' in text or 'taverna' in text:
+            data.hasCellar = True
+        elif 'classe energetica' in text:
+            # Extract energy class (A4, A3, A2, A1, B, C, D, E, F, G)
+            energy_match = re.search(r'\b(A[1-4]|[A-G])\b', text.upper())
+            if energy_match:
+                data.energyClass = energy_match.group(1)
+        elif 'anno' in text and ('costruzione' in text or 'realizzazione' in text):
+            year = extract_number(text)
+            if year and 1800 <= year <= 2025:
+                data.yearBuilt = int(year)
+
+    # Try to extract property state from description or details
+    all_text = soup.get_text().lower()
+    if 'ottimo stato' in all_text or 'ottime condizioni' in all_text:
+        data.state = 'ottimo'
+    elif 'buono stato' in all_text or 'buone condizioni' in all_text:
+        data.state = 'buono'
+    elif 'da ristrutturare' in all_text or 'da rinnovare' in all_text:
+        data.state = 'da_ristrutturare'
+    elif 'discreto' in all_text:
+        data.state = 'discreto'
+
+    # Try to extract property type
+    if 'signorile' in all_text or 'prestigio' in all_text:
+        data.propertyType = 'signorile'
+    elif 'economico' in all_text:
+        data.propertyType = 'economico'
+    elif 'ufficio' in all_text:
+        data.propertyType = 'ufficio'
+    elif 'negozio' in all_text or 'commerciale' in all_text:
+        data.propertyType = 'negozio'
+    else:
+        data.propertyType = 'residenziale'
 
     # Description
     desc_elem = soup.select_one('div.comment, [class*="description"]')
     if desc_elem:
         data.description = desc_elem.text.strip()
 
-    # Photos
-    photos = soup.select('img.detail-image, [class*="gallery"] img')
-    data.photos = [img.get('src', '') for img in photos if img.get('src')]
+    # Images - extract with better structure
+    photos = soup.select('img.detail-image, [class*="gallery"] img, picture img')
+    for img in photos:
+        img_url = img.get('src') or img.get('data-src') or img.get('data-original')
+        if img_url and img_url.startswith('http'):
+            img_data = {
+                'url': img_url,
+                'alt': img.get('alt', ''),
+                'caption': img.get('title', img.get('alt', ''))
+            }
+            if img_data not in data.images:
+                data.images.append(img_data)
 
     return data
 
@@ -140,6 +212,27 @@ def parse_immobiliare(soup: BeautifulSoup, url: str) -> PropertyData:
     if price_elem:
         data.price = extract_number(price_elem.text)
 
+    # Address
+    address_elem = soup.select_one('[class*="address"], [class*="location"]')
+    if address_elem:
+        address_text = address_elem.text.strip()
+        data.address = address_text
+
+        # Try to extract city and postal code
+        if ',' in address_text:
+            parts = [p.strip() for p in address_text.split(',')]
+            if len(parts) >= 2:
+                data.city = parts[-1]
+
+        postal_match = re.search(r'\b\d{5}\b', address_text)
+        if postal_match:
+            data.postalCode = postal_match.group()
+
+    # Description
+    desc_elem = soup.select_one('[class*="description"]')
+    if desc_elem:
+        data.description = desc_elem.text.strip()
+
     # Features
     features = soup.select('div.im-features__item, [class*="feature"]')
     for feature in features:
@@ -160,8 +253,61 @@ def parse_immobiliare(soup: BeautifulSoup, url: str) -> PropertyData:
             data.bedrooms = int(extract_number(value_text) or 0)
         elif 'bagni' in label_text:
             data.bathrooms = int(extract_number(value_text) or 0)
-        elif 'piano' in label_text:
+        elif 'piano' in label_text and 'piani' not in label_text:
             data.floor = int(extract_number(value_text) or 0)
+        elif 'piani edificio' in label_text or 'totale piani' in label_text:
+            data.totalFloors = int(extract_number(value_text) or 0)
+        elif 'ascensore' in value_text or 'ascensore' in label_text:
+            data.hasElevator = 'sì' in value_text or 'presente' in value_text
+        elif 'box' in value_text or 'posto auto' in value_text or 'garage' in value_text:
+            data.hasParking = True
+        elif 'balcon' in value_text or 'terrazzo' in value_text:
+            data.hasBalcony = True
+        elif 'cantina' in value_text:
+            data.hasCellar = True
+        elif 'classe energetica' in label_text:
+            energy_match = re.search(r'\b(A[1-4]|[A-G])\b', value_text.upper())
+            if energy_match:
+                data.energyClass = energy_match.group(1)
+        elif 'anno' in label_text:
+            year = extract_number(value_text)
+            if year and 1800 <= year <= 2025:
+                data.yearBuilt = int(year)
+        elif 'stato' in label_text or 'condizioni' in label_text:
+            if 'ottimo' in value_text:
+                data.state = 'ottimo'
+            elif 'buono' in value_text:
+                data.state = 'buono'
+            elif 'ristrutturare' in value_text:
+                data.state = 'da_ristrutturare'
+            elif 'discreto' in value_text:
+                data.state = 'discreto'
+
+    # Extract property type from page content
+    all_text = soup.get_text().lower()
+    if 'signorile' in all_text or 'prestigio' in all_text:
+        data.propertyType = 'signorile'
+    elif 'economico' in all_text:
+        data.propertyType = 'economico'
+    elif 'ufficio' in all_text:
+        data.propertyType = 'ufficio'
+    elif 'negozio' in all_text or 'commerciale' in all_text:
+        data.propertyType = 'negozio'
+    else:
+        data.propertyType = 'residenziale'
+
+    # Images
+    photos = soup.select('img[class*="gallery"], picture img, [class*="photo"] img')
+    for img in photos:
+        img_url = img.get('src') or img.get('data-src') or img.get('data-original')
+        if img_url and img_url.startswith('http'):
+            img_data = {
+                'url': img_url,
+                'alt': img.get('alt', ''),
+                'caption': img.get('title', img.get('alt', ''))
+            }
+            if img_data not in data.images:
+                data.images.append(img_data)
 
     return data
 

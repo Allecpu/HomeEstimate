@@ -8,6 +8,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { propertySchema, type PropertyFormData, getMissingFields, calculateDataCompleteness } from '@/lib/validation';
 import { Progress } from '@/components/ui/progress';
 
@@ -35,6 +38,50 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
 
       const parsed = Number(normalised);
       return Number.isFinite(parsed) ? parsed : undefined;
+    }
+
+    return undefined;
+  };
+
+  const parseFloorValue = (value: unknown): number | undefined => {
+    if (value === null || value === undefined || value === '') {
+      return undefined;
+    }
+
+    if (typeof value === 'number') {
+      const parsed = Math.floor(value);
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+    }
+
+    if (typeof value === 'string') {
+      const normalized = value.toLowerCase().replace(/\./g, '').replace(',', '.').trim();
+      if (normalized.length === 0) {
+        return undefined;
+      }
+
+      const aliasKey = normalized.replace(/\s+/g, '');
+      const synonyms: Record<string, number> = {
+        p: 0,
+        pt: 0,
+        t: 0,
+        terra: 0,
+        pianoterra: 0,
+        pianorialzato: 0,
+        prialzato: 0,
+        rialzato: 0,
+      };
+
+      if (aliasKey in synonyms) {
+        return synonyms[aliasKey];
+      }
+
+      const digitsOnly = aliasKey.replace(/[^\d-]/g, '');
+      if (digitsOnly.length === 0) {
+        return undefined;
+      }
+
+      const parsed = Number.parseInt(digitsOnly, 10);
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
     }
 
     return undefined;
@@ -80,7 +127,7 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
       result.bathrooms = bathrooms;
     }
 
-    const floor = toNumber(initialData.floor);
+    const floor = parseFloorValue(initialData.floor);
     if (floor !== undefined) {
       result.floor = floor;
     }
@@ -337,7 +384,9 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
                 type="number"
                 placeholder="2"
                 min="0"
-                {...register('floor', { valueAsNumber: true })}
+                {...register('floor', {
+                  setValueAs: (value) => parseFloorValue(value),
+                })}
                 className={errors.floor ? 'border-red-500' : ''}
               />
               {errors.floor && (
@@ -386,6 +435,217 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
                     return Math.floor(parsed);
                   }
                 })}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Dotazioni e Servizi */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Dotazioni e Servizi</CardTitle>
+            <CardDescription>Seleziona i servizi presenti nell'immobile</CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex items-center space-x-2">
+              <Controller
+                name="hasElevator"
+                control={control}
+                render={({ field }) => (
+                  <Checkbox
+                    id="hasElevator"
+                    checked={field.value === true}
+                    onCheckedChange={(checked) => field.onChange(checked === true ? true : undefined)}
+                  />
+                )}
+              />
+              <Label htmlFor="hasElevator" className="cursor-pointer">Ascensore</Label>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Controller
+                name="hasParking"
+                control={control}
+                render={({ field }) => (
+                  <Checkbox
+                    id="hasParking"
+                    checked={field.value === true}
+                    onCheckedChange={(checked) => field.onChange(checked === true ? true : undefined)}
+                  />
+                )}
+              />
+              <Label htmlFor="hasParking" className="cursor-pointer">Posto Auto / Box</Label>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Controller
+                name="hasBalcony"
+                control={control}
+                render={({ field }) => (
+                  <Checkbox
+                    id="hasBalcony"
+                    checked={field.value === true}
+                    onCheckedChange={(checked) => field.onChange(checked === true ? true : undefined)}
+                  />
+                )}
+              />
+              <Label htmlFor="hasBalcony" className="cursor-pointer">Balcone / Terrazzo</Label>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Controller
+                name="hasCellar"
+                control={control}
+                render={({ field }) => (
+                  <Checkbox
+                    id="hasCellar"
+                    checked={field.value === true}
+                    onCheckedChange={(checked) => field.onChange(checked === true ? true : undefined)}
+                  />
+                )}
+              />
+              <Label htmlFor="hasCellar" className="cursor-pointer">Cantina</Label>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Tipologia e Stato */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Tipologia e Stato</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="propertyType">Tipologia</Label>
+              <Controller
+                name="propertyType"
+                control={control}
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger id="propertyType">
+                      <SelectValue placeholder="Seleziona tipologia" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="residenziale">Residenziale</SelectItem>
+                      <SelectItem value="signorile">Signorile</SelectItem>
+                      <SelectItem value="economico">Economico</SelectItem>
+                      <SelectItem value="ufficio">Ufficio</SelectItem>
+                      <SelectItem value="negozio">Negozio</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="state">Stato</Label>
+              <Controller
+                name="state"
+                control={control}
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger id="state">
+                      <SelectValue placeholder="Seleziona stato" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ottimo">Ottimo</SelectItem>
+                      <SelectItem value="buono">Buono</SelectItem>
+                      <SelectItem value="discreto">Discreto</SelectItem>
+                      <SelectItem value="da_ristrutturare">Da Ristrutturare</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="energyClass">Classe Energetica</Label>
+              <Controller
+                name="energyClass"
+                control={control}
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger id="energyClass">
+                      <SelectValue placeholder="Seleziona classe" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="A4">A4</SelectItem>
+                      <SelectItem value="A3">A3</SelectItem>
+                      <SelectItem value="A2">A2</SelectItem>
+                      <SelectItem value="A1">A1</SelectItem>
+                      <SelectItem value="B">B</SelectItem>
+                      <SelectItem value="C">C</SelectItem>
+                      <SelectItem value="D">D</SelectItem>
+                      <SelectItem value="E">E</SelectItem>
+                      <SelectItem value="F">F</SelectItem>
+                      <SelectItem value="G">G</SelectItem>
+                      <SelectItem value="NC">Non Certificato</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Localizzazione Dettagliata */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Dettagli Localizzazione</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="province">Provincia</Label>
+              <Input
+                id="province"
+                placeholder="MI"
+                maxLength={2}
+                {...register('province')}
+                className={errors.province ? 'border-red-500' : ''}
+              />
+              {errors.province && (
+                <p className="text-sm text-red-500">{errors.province.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="postalCode">CAP</Label>
+              <Input
+                id="postalCode"
+                placeholder="20121"
+                maxLength={5}
+                {...register('postalCode')}
+                className={errors.postalCode ? 'border-red-500' : ''}
+              />
+              {errors.postalCode && (
+                <p className="text-sm text-red-500">{errors.postalCode.message}</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Descrizione */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Informazioni Aggiuntive</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="title">Titolo Annuncio</Label>
+              <Input
+                id="title"
+                placeholder="Es. Appartamento luminoso in centro"
+                {...register('title')}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="description">Descrizione</Label>
+              <Textarea
+                id="description"
+                placeholder="Descrizione dettagliata dell'immobile..."
+                rows={4}
+                {...register('description')}
               />
             </div>
           </CardContent>

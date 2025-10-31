@@ -63,10 +63,11 @@ export function ImageGallery({ images }: ImageGalleryProps) {
         }
 
         if (typeof item === 'object') {
+          const itemObj = item as unknown as Record<string, unknown>;
           const possibleUrl =
-            (item as Record<string, unknown>).url ||
-            (item as Record<string, unknown>).src ||
-            (item as Record<string, unknown>).href;
+            itemObj.url ||
+            itemObj.src ||
+            itemObj.href;
 
           if (typeof possibleUrl === 'string' && possibleUrl.length > 0) {
             return {
