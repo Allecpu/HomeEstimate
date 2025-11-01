@@ -46,12 +46,16 @@ export function Step3VerifyLocation({ onNext, onBack, propertyData }: Step3Props
   // Fix Leaflet icon issue with Next.js
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const L = require('leaflet');
-      delete (L.Icon.Default.prototype as any)._getIconUrl;
-      L.Icon.Default.mergeOptions({
-        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+      import('leaflet').then((leaflet) => {
+        const LeafletIcon = leaflet.Icon.Default.prototype as unknown as {
+          _getIconUrl?: string;
+        };
+        delete LeafletIcon._getIconUrl;
+        leaflet.Icon.Default.mergeOptions({
+          iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+          iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+          shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+        });
       });
     }
   }, []);
@@ -163,7 +167,7 @@ export function Step3VerifyLocation({ onNext, onBack, propertyData }: Step3Props
             Verifica Posizione
           </CardTitle>
           <CardDescription>
-            Conferma che la posizione dell'immobile sulla mappa sia corretta
+            Conferma che la posizione dell&apos;immobile sulla mappa sia corretta
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -228,7 +232,7 @@ export function Step3VerifyLocation({ onNext, onBack, propertyData }: Step3Props
                 <Alert className="bg-green-50 border-green-200">
                   <CheckCircle2 className="h-4 w-4 text-green-600" />
                   <AlertDescription className="ml-2 text-green-800">
-                    Posizione trovata! Verifica che il marker sulla mappa corrisponda all'indirizzo corretto.
+                    Posizione trovata! Verifica che il marker sulla mappa corrisponda all&apos;indirizzo corretto.
                   </AlertDescription>
                 </Alert>
               )}

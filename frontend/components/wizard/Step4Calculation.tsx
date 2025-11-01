@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Calculator, CheckCircle2, AlertCircle, Loader2, TrendingUp, MapPin, Home } from 'lucide-react';
+import { Calculator, CheckCircle2, AlertCircle, Loader2, MapPin, Home } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -9,7 +9,7 @@ import { Progress } from '@/components/ui/progress';
 import { PropertyFormData } from '@/lib/validation';
 
 interface Step4Props {
-  onNext: (estimationData: any) => void;
+  onNext: (estimationData: Record<string, unknown>) => void;
   onBack: () => void;
   propertyData: PropertyFormData & { lat?: number; lng?: number };
 }
@@ -104,7 +104,7 @@ export function Step4Calculation({ onNext, onBack, propertyData }: Step4Props) {
 
   const handleContinue = () => {
     if (result) {
-      onNext(result);
+      onNext(result as unknown as Record<string, unknown>);
     }
   };
 
@@ -282,7 +282,7 @@ export function Step4Calculation({ onNext, onBack, propertyData }: Step4Props) {
               {/* Info Note */}
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                 <p className="text-sm text-yellow-800">
-                  <strong>Nota:</strong> Questa è una stima indicativa basata sui dati forniti e sull'analisi
+                  <strong>Nota:</strong> Questa è una stima indicativa basata sui dati forniti e sull&apos;analisi
                   del mercato locale. Per una valutazione ufficiale, si consiglia di consultare un professionista
                   del settore immobiliare.
                 </p>

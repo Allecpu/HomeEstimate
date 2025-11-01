@@ -9,12 +9,12 @@ import { Button } from '@/components/ui/button';
 
 interface ImageItem {
   url: string;
-  caption?: string | null;
-  alt?: string | null;
+  caption: string | null | undefined;
+  alt: string | null | undefined;
 }
 
 interface ImageGalleryProps {
-  images: Array<ImageItem | string | null | undefined> | null | undefined;
+  images: Array<ImageItem | string | Record<string, unknown> | null | undefined> | null | undefined;
 }
 
 function getExtensionFromType(contentType: string | null, fallbackUrl: string) {
@@ -51,14 +51,19 @@ export function ImageGallery({ images }: ImageGalleryProps) {
         }
 
         if (typeof item === 'string') {
-          return { url: item } satisfies ImageItem;
+          return {
+            url: item,
+            caption: undefined,
+            alt: undefined,
+          } satisfies ImageItem;
         }
 
         if (typeof item === 'object' && 'url' in item && item.url) {
+          const itemObj = item as Record<string, unknown>;
           return {
-            url: item.url,
-            caption: item.caption ?? item.alt ?? null,
-            alt: item.alt ?? item.caption ?? null,
+            url: itemObj.url as string,
+            caption: (itemObj.caption ?? itemObj.alt ?? undefined) as string | null | undefined,
+            alt: (itemObj.alt ?? itemObj.caption ?? undefined) as string | null | undefined,
           } satisfies ImageItem;
         }
 
@@ -72,8 +77,8 @@ export function ImageGallery({ images }: ImageGalleryProps) {
           if (typeof possibleUrl === 'string' && possibleUrl.length > 0) {
             return {
               url: possibleUrl,
-              caption: (item as Record<string, unknown>).caption as string | undefined,
-              alt: (item as Record<string, unknown>).alt as string | undefined,
+              caption: (itemObj.caption as string | null | undefined) ?? undefined,
+              alt: (itemObj.alt as string | null | undefined) ?? undefined,
             } satisfies ImageItem;
           }
         }

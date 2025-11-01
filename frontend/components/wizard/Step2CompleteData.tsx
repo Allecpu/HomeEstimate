@@ -207,7 +207,7 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
     [processedData]
   );
 
-  const lastAppliedSignatureRef = useRef<string>();
+  const lastAppliedSignatureRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     if (!initialData || Object.keys(initialData).length === 0) {
@@ -273,7 +273,7 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Home className="w-5 h-5" />
-                Completa i Dati dell'Immobile
+                Completa i Dati dell&apos;Immobile
               </CardTitle>
               <CardDescription>
                 I campi evidenziati sono obbligatori. Più dati fornisci, più accurata sarà la stima.
@@ -489,7 +489,7 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Dotazioni e Servizi</CardTitle>
-            <CardDescription>Seleziona i servizi presenti nell'immobile</CardDescription>
+            <CardDescription>Seleziona i servizi presenti nell&apos;immobile</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-center space-x-2">

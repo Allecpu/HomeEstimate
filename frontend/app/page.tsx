@@ -1,12 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { WizardStepper } from '@/components/wizard/WizardStepper';
 import { Step1UrlInput } from '@/components/wizard/Step1UrlInput';
 import { Step2CompleteData } from '@/components/wizard/Step2CompleteData';
 import { Step3VerifyLocation } from '@/components/wizard/Step3VerifyLocation';
 import { Step4Calculation } from '@/components/wizard/Step4Calculation';
+import { PropertyFormData } from '@/lib/validation';
+
+type WizardData = Partial<PropertyFormData> & { lat?: number; lng?: number; url?: string };
 
 const WIZARD_STEPS = [
   {
@@ -36,11 +39,11 @@ const WIZARD_STEPS = [
   },
 ];
 
-export default function Home() {
+function HomeContent() {
   const searchParams = useSearchParams();
   const [currentStep, setCurrentStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
-  const [wizardData, setWizardData] = useState<any>({});
+  const [wizardData, setWizardData] = useState<WizardData>({});
 
   // Check for extension data on mount
   useEffect(() => {
@@ -58,25 +61,25 @@ export default function Home() {
     }
   }, [searchParams]);
 
-  const handleStep1Complete = (data: any) => {
+  const handleStep1Complete = (data: WizardData) => {
     setWizardData({ ...wizardData, ...data });
     setCompletedSteps([...completedSteps, 1]);
     setCurrentStep(2);
   };
 
-  const handleStep2Complete = (data: any) => {
+  const handleStep2Complete = (data: WizardData) => {
     setWizardData({ ...wizardData, ...data });
     setCompletedSteps([...completedSteps, 2]);
     setCurrentStep(3);
   };
 
-  const handleStep3Complete = (data: any) => {
+  const handleStep3Complete = (data: WizardData) => {
     setWizardData({ ...wizardData, ...data });
     setCompletedSteps([...completedSteps, 3]);
     setCurrentStep(4);
   };
 
-  const handleStep4Complete = (data: any) => {
+  const handleStep4Complete = (data: WizardData) => {
     setWizardData({ ...wizardData, ...data });
     setCompletedSteps([...completedSteps, 4]);
     setCurrentStep(5);
@@ -107,7 +110,7 @@ export default function Home() {
           {currentStep === 1 && (
             <Step1UrlInput
               onNext={handleStep1Complete}
-              initialUrl={wizardData.url}
+              initialUrl={typeof wizardData.url === 'string' ? wizardData.url : undefined}
             />
           )}
 
@@ -115,7 +118,7 @@ export default function Home() {
             <Step2CompleteData
               onNext={handleStep2Complete}
               onBack={handleBack}
-              initialData={wizardData}
+              initialData={wizardData as PropertyFormData}
             />
           )}
 
@@ -123,7 +126,7 @@ export default function Home() {
             <Step3VerifyLocation
               onNext={handleStep3Complete}
               onBack={handleBack}
-              propertyData={wizardData}
+              propertyData={wizardData as PropertyFormData & { lat?: number; lng?: number }}
             />
           )}
 
@@ -131,7 +134,7 @@ export default function Home() {
             <Step4Calculation
               onNext={handleStep4Complete}
               onBack={handleBack}
-              propertyData={wizardData}
+              propertyData={wizardData as PropertyFormData & { lat?: number; lng?: number }}
             />
           )}
 
@@ -143,5 +146,13 @@ export default function Home() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+      <HomeContent />
+    </Suspense>
   );
 }

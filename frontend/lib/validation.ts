@@ -85,10 +85,10 @@ export type CoordinatesFormData = z.infer<typeof coordinatesSchema>;
 export function validateField<T>(
   schema: z.ZodSchema<T>,
   fieldName: keyof T,
-  value: any
+  value: unknown
 ): { valid: boolean; error?: string } {
   try {
-    const fieldSchema = (schema as any).shape[fieldName];
+    const fieldSchema = (schema as z.ZodObject<z.ZodRawShape>).shape[fieldName as string] as z.ZodTypeAny;
     if (!fieldSchema) {
       return { valid: true };
     }
@@ -96,7 +96,7 @@ export function validateField<T>(
     return { valid: true };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { valid: false, error: error.errors[0]?.message };
+      return { valid: false, error: (error as z.ZodError<unknown>).issues[0]?.message };
     }
     return { valid: false, error: 'Errore di validazione' };
   }

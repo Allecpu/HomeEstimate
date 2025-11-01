@@ -13,19 +13,19 @@ import { ImageGallery } from '@/components/wizard/ImageGallery';
 import { urlSchema, type UrlFormData } from '@/lib/validation';
 
 interface Step1Props {
-  onNext: (data: any) => void;
+  onNext: (data: Record<string, unknown>) => void;
   initialUrl?: string;
 }
 
 export function Step1UrlInput({ onNext, initialUrl }: Step1Props) {
   const [isLoading, setIsLoading] = useState(false);
-  const [parsedData, setParsedData] = useState<any>(null);
+  const [parsedData, setParsedData] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [extensionDataAvailable, setExtensionDataAvailable] = useState(false);
 
-  const parsedImages = useMemo(() => {
+  const parsedImages = useMemo((): Array<string | Record<string, unknown> | null | undefined> => {
     if (!parsedData || typeof parsedData !== 'object') {
-      return [] as Array<string | Record<string, unknown>>;
+      return [] as Array<string | Record<string, unknown> | null | undefined>;
     }
 
     const source = parsedData as Record<string, unknown>;
@@ -56,22 +56,22 @@ export function Step1UrlInput({ onNext, initialUrl }: Step1Props) {
 
     const directArray = findArray(source);
     if (directArray) {
-      return directArray as Array<string | Record<string, unknown>>;
+      return directArray as Array<string | Record<string, unknown> | null | undefined>;
     }
 
     const mediaValue = source['media'];
     if (Array.isArray(mediaValue) && mediaValue.length > 0) {
-      return mediaValue as Array<string | Record<string, unknown>>;
+      return mediaValue as Array<string | Record<string, unknown> | null | undefined>;
     }
 
     if (mediaValue && typeof mediaValue === 'object') {
       const nested = findArray(mediaValue as Record<string, unknown>);
       if (nested) {
-        return nested as Array<string | Record<string, unknown>>;
+        return nested as Array<string | Record<string, unknown> | null | undefined>;
       }
     }
 
-    return [] as Array<string | Record<string, unknown>>;
+    return [] as Array<string | Record<string, unknown> | null | undefined>;
   }, [parsedData]);
 
   const {
@@ -122,9 +122,10 @@ export function Step1UrlInput({ onNext, initialUrl }: Step1Props) {
     checkExtensionData();
 
     // Listen for custom event
-    const handleExtensionData = (e: any) => {
-      console.log('Extension data event received:', e.detail);
-      setParsedData(e.detail);
+    const handleExtensionData = (e: Event) => {
+      const customEvent = e as CustomEvent<Record<string, unknown>>;
+      console.log('Extension data event received:', customEvent.detail);
+      setParsedData(customEvent.detail);
       setExtensionDataAvailable(true);
     };
 
@@ -181,15 +182,15 @@ export function Step1UrlInput({ onNext, initialUrl }: Step1Props) {
           <CardHeader>
             <CardTitle className="text-blue-700 flex items-center gap-2">
               <Download className="w-5 h-5" />
-              Dati dall'Extension Pronti!
+              Dati dall&apos;Extension Pronti!
             </CardTitle>
             <CardDescription className="text-blue-600">
-              L'extension del browser ha estratto i dati dell'annuncio. Clicca il pulsante qui sotto per usarli.
+              L&apos;extension del browser ha estratto i dati dell&apos;annuncio. Clicca il pulsante qui sotto per usarli.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Button onClick={useExtensionData} className="w-full bg-blue-600 hover:bg-blue-700">
-              Usa Dati dall'Extension
+              Usa Dati dall&apos;Extension
             </Button>
           </CardContent>
         </Card>
@@ -202,7 +203,7 @@ export function Step1UrlInput({ onNext, initialUrl }: Step1Props) {
             Inserisci URL Annuncio
           </CardTitle>
           <CardDescription>
-            Incolla il link dell'annuncio da Idealista, Immobiliare.it o Casa.it
+            Incolla il link dell&apos;annuncio da Idealista, Immobiliare.it o Casa.it
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -256,13 +257,13 @@ export function Step1UrlInput({ onNext, initialUrl }: Step1Props) {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-4 text-sm">
-              {parsedData.address && (
+              {typeof parsedData.address === 'string' && parsedData.address && (
                 <div>
                   <p className="text-gray-600">Indirizzo</p>
                   <p className="font-medium">{parsedData.address}</p>
                 </div>
               )}
-              {parsedData.price && (
+              {typeof parsedData.price === 'number' && parsedData.price && (
                 <div>
                   <p className="text-gray-600">Prezzo</p>
                   <p className="font-medium">
@@ -274,13 +275,13 @@ export function Step1UrlInput({ onNext, initialUrl }: Step1Props) {
                   </p>
                 </div>
               )}
-              {parsedData.surface && (
+              {typeof parsedData.surface === 'number' && parsedData.surface && (
                 <div>
                   <p className="text-gray-600">Superficie</p>
                   <p className="font-medium">{parsedData.surface} m²</p>
                 </div>
               )}
-              {parsedData.rooms && (
+              {typeof parsedData.rooms === 'number' && parsedData.rooms && (
                 <div>
                   <p className="text-gray-600">Locali</p>
                   <p className="font-medium">{parsedData.rooms}</p>
