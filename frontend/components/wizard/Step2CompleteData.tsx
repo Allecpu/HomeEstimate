@@ -112,6 +112,16 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
       result.price = price;
     }
 
+    const pricePerSqm = toNumber(initialData.pricePerSqm);
+    if (pricePerSqm !== undefined) {
+      result.pricePerSqm = pricePerSqm;
+    }
+
+    const condoFeesMonthly = toNumber(initialData.condoFeesMonthly);
+    if (condoFeesMonthly !== undefined) {
+      result.condoFeesMonthly = condoFeesMonthly;
+    }
+
     const rooms = toNumber(initialData.rooms);
     if (rooms !== undefined) {
       result.rooms = rooms;
@@ -135,6 +145,16 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
     const totalFloors = toNumber(initialData.totalFloors);
     if (totalFloors !== undefined) {
       result.totalFloors = totalFloors;
+    }
+
+    const surfaceCommercial = toNumber(initialData.surfaceCommercial);
+    if (surfaceCommercial !== undefined) {
+      result.surfaceCommercial = surfaceCommercial;
+    }
+
+    const surfaceUsable = toNumber(initialData.surfaceUsable);
+    if (surfaceUsable !== undefined) {
+      result.surfaceUsable = surfaceUsable;
     }
 
     const yearBuilt = toNumber(initialData.yearBuilt);
@@ -167,6 +187,14 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
       result.hasCellar = initialData.hasCellar;
     }
 
+    if (initialData.hasGarden !== undefined) {
+      result.hasGarden = initialData.hasGarden;
+    }
+
+    if (initialData.parkingIncluded !== undefined) {
+      result.parkingIncluded = initialData.parkingIncluded;
+    }
+
     if (initialData.propertyType !== undefined) {
       result.propertyType = initialData.propertyType;
     }
@@ -177,6 +205,27 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
 
     if (initialData.energyClass !== undefined) {
       result.energyClass = initialData.energyClass;
+    }
+
+    const energyPerformance = toNumber(initialData.energyPerformance);
+    if (energyPerformance !== undefined) {
+      result.energyPerformance = energyPerformance;
+    }
+
+    if (initialData.orientation !== undefined) {
+      result.orientation = initialData.orientation;
+    }
+
+    if (initialData.heating !== undefined) {
+      result.heating = initialData.heating;
+    }
+
+    if (initialData.heatingType !== undefined) {
+      result.heatingType = initialData.heatingType;
+    }
+
+    if (initialData.gardenType !== undefined) {
+      result.gardenType = initialData.gardenType;
     }
 
     if (initialData.title !== undefined) {
@@ -375,6 +424,28 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
                 <p className="text-sm text-red-500">{errors.price.message}</p>
               )}
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="pricePerSqm">Prezzo al m² (€)</Label>
+              <Input
+                id="pricePerSqm"
+                type="number"
+                step="0.01"
+                placeholder="3.200"
+                {...register('pricePerSqm', { valueAsNumber: true })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="condoFeesMonthly">Spese condominiali (€/mese)</Label>
+              <Input
+                id="condoFeesMonthly"
+                type="number"
+                step="0.01"
+                placeholder="150"
+                {...register('condoFeesMonthly', { valueAsNumber: true })}
+              />
+            </div>
           </CardContent>
         </Card>
 
@@ -455,6 +526,28 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
                     return Math.floor(parsed);
                   }
                 })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="surfaceCommercial">Superficie commerciale (m²)</Label>
+              <Input
+                id="surfaceCommercial"
+                type="number"
+                placeholder="64"
+                min="0"
+                {...register('surfaceCommercial', { valueAsNumber: true })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="surfaceUsable">Superficie calpestabile (m²)</Label>
+              <Input
+                id="surfaceUsable"
+                type="number"
+                placeholder="62"
+                min="0"
+                {...register('surfaceUsable', { valueAsNumber: true })}
               />
             </div>
 
@@ -551,6 +644,36 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
               />
               <Label htmlFor="hasCellar" className="cursor-pointer">Cantina</Label>
             </div>
+
+            <div className="flex items-center space-x-2">
+              <Controller
+                name="parkingIncluded"
+                control={control}
+                render={({ field }) => (
+                  <Checkbox
+                    id="parkingIncluded"
+                    checked={field.value === true}
+                    onCheckedChange={(checked) => field.onChange(checked === true ? true : undefined)}
+                  />
+                )}
+              />
+              <Label htmlFor="parkingIncluded" className="cursor-pointer">Box incluso nel prezzo</Label>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Controller
+                name="hasGarden"
+                control={control}
+                render={({ field }) => (
+                  <Checkbox
+                    id="hasGarden"
+                    checked={field.value === true}
+                    onCheckedChange={(checked) => field.onChange(checked === true ? true : undefined)}
+                  />
+                )}
+              />
+              <Label htmlFor="hasGarden" className="cursor-pointer">Giardino</Label>
+            </div>
           </CardContent>
         </Card>
 
@@ -628,6 +751,61 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
                     </SelectContent>
                   </Select>
                 )}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Dettagli aggiuntivi */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Dettagli aggiuntivi</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="orientation">Orientamento</Label>
+              <Input
+                id="orientation"
+                placeholder="Nord, Sud, Est, Ovest"
+                {...register('orientation')}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="gardenType">Tipo di giardino</Label>
+              <Input
+                id="gardenType"
+                placeholder="Giardino comune"
+                {...register('gardenType')}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="heating">Riscaldamento</Label>
+              <Input
+                id="heating"
+                placeholder="Riscaldamento autonomo"
+                {...register('heating')}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="heatingType">Tipo riscaldamento</Label>
+              <Input
+                id="heatingType"
+                placeholder="Autonomo"
+                {...register('heatingType')}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="energyPerformance">Prestazione energetica (kWh/m² anno)</Label>
+              <Input
+                id="energyPerformance"
+                type="number"
+                step="0.01"
+                placeholder="434.51"
+                {...register('energyPerformance', { valueAsNumber: true })}
               />
             </div>
           </CardContent>

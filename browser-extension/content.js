@@ -11,6 +11,24 @@ function extractNumber(text) {
   return match ? parseFloat(match[0]) : null;
 }
 
+function capitalizeWords(value) {
+  if (!value) return '';
+  return value
+    .split(/\s+/)
+    .map(word => word.length === 0 ? '' : word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+    .trim();
+}
+
+function formatList(value) {
+  if (!value) return '';
+  return value
+    .split(/[,;]+/)
+    .map(part => capitalizeWords(part.trim()))
+    .filter(part => part.length > 0)
+    .join(', ');
+}
+
 // Extract data from Idealista
 function extractIdealista() {
   const data = {
@@ -82,13 +100,94 @@ function extractIdealista() {
   // This is more reliable than parsing all text
   const mainInfoText = document.body.innerText;
 
+  const pricePerSqmMatch = mainInfoText.match(/prezzo\s+al\s+m(?:\u00B2|2)[\s:]*([\d\.,]+)/i);
+  if (pricePerSqmMatch) {
+    data.pricePerSqm = extractNumber(pricePerSqmMatch[1]);
+  }
+
+  const condoFeesMatch = mainInfoText.match(/(\d[\d\.,]*)\s*\u20AC\s*(?:\/\s*mese|al\s*mese)?[^\n]*spese\s+condominiali/i);
+  if (condoFeesMatch) {
+    data.condoFeesMonthly = extractNumber(condoFeesMatch[1]);
+  }
+
   // Surface: Look for pattern like "132 m2" in the main info
-  const surfaceMatch = mainInfoText.match(/(\d{2,4})\s*m[2²]/i);
+  const surfaceMatch = mainInfoText.match(/(\d{2,4})\s*m(?:\u00B2|2)/i);
   if (surfaceMatch) {
     const foundSurface = parseInt(surfaceMatch[1]);
     // Only use if reasonable (10-5000 m²)
     if (foundSurface >= 10 && foundSurface <= 5000) {
       data.surface = foundSurface;
+    }
+  }
+
+  if (!data.surfaceCommercial) {
+    const surfaceCommercialMatch = mainInfoText.match(/(\d+(?:[\.,]\d+)?)\s*m(?:\u00B2|2)\s*commercial/i);
+    if (surfaceCommercialMatch) {
+      const commercialValue = extractNumber(surfaceCommercialMatch[1]);
+      if (commercialValue !== null && commercialValue !== undefined) {
+        data.surfaceCommercial = commercialValue;
+      }
+    }
+  }
+
+  if (!data.surfaceUsable) {
+    const surfaceUsableMatch = mainInfoText.match(/(\d+(?:[\.,]\d+)?)\s*m(?:\u00B2|2)\s*(?:calpestabil|abitabil)/i);
+    if (surfaceUsableMatch) {
+      const usableValue = extractNumber(surfaceUsableMatch[1]);
+      if (usableValue !== null && usableValue !== undefined) {
+        data.surfaceUsable = usableValue;
+      }
+    }
+  }
+
+  if (!data.orientation) {
+    const orientationMatch = mainInfoText.match(/orientamento\s*[:\-]?\s*([^\n]+)/i);
+    if (orientationMatch) {
+      data.orientation = formatList(orientationMatch[1]);
+    }
+  }
+
+  if (!data.heating) {
+    const heatingMatch = mainInfoText.match(/riscaldamento\s*[:\-]?\s*([^\n]+)/i);
+    if (heatingMatch) {
+      const heatingValue = heatingMatch[1]?.trim() || heatingMatch[0];
+      const includesLabel = heatingValue.toLowerCase().includes('riscaldamento');
+      const normalisedHeating = includesLabel
+        ? capitalizeWords(heatingValue)
+        : `Riscaldamento ${capitalizeWords(heatingValue)}`;
+      data.heating = normalisedHeating;
+
+      if (!data.heatingType) {
+        const typeCandidate = heatingMatch[1]?.trim() || heatingMatch[0];
+        const cleanedType = typeCandidate.replace(/riscaldamento/i, '').trim();
+        data.heatingType = cleanedType ? capitalizeWords(cleanedType) : 'Riscaldamento';
+      }
+    }
+  }
+
+  if (!data.energyPerformance) {
+    const energyPerfMatch = mainInfoText.match(/(\d+(?:[\.,]\d+)?)\s*kwh\/?\s*m(?:\u00B2|2)/i);
+    if (energyPerfMatch) {
+      const perfValue = extractNumber(energyPerfMatch[1]);
+      if (perfValue !== null && perfValue !== undefined) {
+        data.energyPerformance = perfValue;
+      }
+    }
+  }
+
+  if (!data.hasGarden) {
+    const gardenMatch = mainInfoText.match(/giardino\s*(comune|privato|condominiale|di\s+propriet\u00E0)?/i);
+    if (gardenMatch) {
+      data.hasGarden = true;
+      const descriptor = gardenMatch[1] ? capitalizeWords(gardenMatch[1]) : '';
+      data.gardenType = descriptor ? `Giardino ${descriptor}` : 'Giardino';
+    }
+  }
+
+  if (!data.parkingIncluded) {
+    const parkingIncludedMatch = mainInfoText.match(/box\s+(?:incluso|compreso)[^\n]*prezzo/i);
+    if (parkingIncludedMatch) {
+      data.parkingIncluded = true;
     }
   }
 
@@ -121,10 +220,52 @@ function extractIdealista() {
   // Fallback: Details from feature lists
   const details = document.querySelectorAll('div.info-features span, [class*="details"] span, [class*="feature"] span, .details-property_features li');
   details.forEach(detail => {
-    const text = detail.textContent.toLowerCase();
+    const rawText = detail.textContent ? detail.textContent.trim() : '';
+    if (!rawText) return;
+    const text = rawText.toLowerCase();
+    const segments = rawText.split(/[\n,;\u2022]/);
+
+    segments.forEach(segment => {
+      const segmentText = segment.trim().toLowerCase();
+      if (!segmentText) return;
+
+      if (!data.surfaceCommercial && segmentText.includes('commercial')) {
+        const commercialValue = extractNumber(segment);
+        if (commercialValue !== null && commercialValue !== undefined) {
+          data.surfaceCommercial = commercialValue;
+        }
+      }
+
+      if (!data.surfaceUsable && (segmentText.includes('calpest') || segmentText.includes('abitabil'))) {
+        const usableValue = extractNumber(segment);
+        if (usableValue !== null && usableValue !== undefined) {
+          data.surfaceUsable = usableValue;
+        }
+      }
+
+      if (!data.yearBuilt) {
+        const builtMatch = segment.match(/costruito\s+(?:nel\s+)?(\d{4})/i);
+        if (builtMatch) {
+          const year = parseInt(builtMatch[1], 10);
+          if (year >= 1800 && year <= new Date().getFullYear()) {
+            data.yearBuilt = year;
+          }
+        }
+      }
+
+      if (!data.energyPerformance) {
+        const energyPerfMatch = segment.match(/(\d+(?:[\.,]\d+)?)\s*kwh\/?\s*m(?:\u00B2|2)/i);
+        if (energyPerfMatch) {
+          const perfValue = extractNumber(energyPerfMatch[0]);
+          if (perfValue !== null && perfValue !== undefined) {
+            data.energyPerformance = perfValue;
+          }
+        }
+      }
+    });
 
     // Only set if not already extracted
-    if (!data.surface && (text.includes('m²') || text.includes('mq'))) {
+    if (!data.surface && (text.includes('m\u00B2') || text.includes('mq') || text.includes('m2'))) {
       data.surface = extractNumber(text);
     }
     if (!data.rooms && (text.includes('locale') || text.includes('locali'))) {
@@ -136,13 +277,86 @@ function extractIdealista() {
     if (!data.bathrooms && (text.includes('bagno') || text.includes('bagni'))) {
       data.bathrooms = Math.floor(extractNumber(text) || 0);
     }
-    if (text.includes('parcheggio') || text.includes('garage') || text.includes('box')) {
+    if (text.includes('parcheggio') || text.includes('garage') || text.includes('box') || text.includes('posto auto')) {
       data.hasParking = true;
     }
     if (text.includes('balcon') || text.includes('terrazza')) {
       data.hasBalcony = true;
     }
+    if (text.includes('giardino')) {
+      data.hasGarden = true;
+      if (!data.gardenType) {
+        const gardenMatch = rawText.match(/giardino\s*[:\-]?\s*(.*)/i);
+        const gardenValue = gardenMatch && gardenMatch[1] ? gardenMatch[1].trim() : '';
+        const descriptor = gardenValue ? capitalizeWords(gardenValue) : '';
+        data.gardenType = descriptor ? `Giardino ${descriptor}` : capitalizeWords(rawText);
+      }
+    }
+    if (!data.orientation && text.includes('orientament')) {
+      const orientationMatch = rawText.match(/orientamento\s*[:\-]?\s*(.*)/i);
+      const orientationValue = orientationMatch && orientationMatch[1] ? orientationMatch[1].trim() : rawText;
+      const formattedOrientation = formatList(orientationValue);
+      data.orientation = formattedOrientation || capitalizeWords(rawText);
+    }
+    if (!data.heating && text.includes('riscaldament')) {
+      const heatingMatch = rawText.match(/riscaldamento\s*[:\-]?\s*(.*)/i);
+      const heatingValue = heatingMatch && heatingMatch[1] ? heatingMatch[1].trim() : rawText;
+      const includesLabel = heatingValue.toLowerCase().includes('riscaldamento');
+      const normalisedHeating = includesLabel
+        ? capitalizeWords(heatingValue)
+        : `Riscaldamento ${capitalizeWords(heatingValue)}`;
+      data.heating = normalisedHeating;
+      if (!data.heatingType) {
+        const cleanedType = heatingValue.replace(/riscaldamento/i, '').trim();
+        data.heatingType = cleanedType ? capitalizeWords(cleanedType) : 'Riscaldamento';
+      }
+    }
+    if (!data.energyClass) {
+      const energyMatch = rawText.match(/classe\s+energetica.*?(A[1-4]|[A-G]|NC)/i);
+      if (energyMatch) {
+        data.energyClass = energyMatch[1].toUpperCase();
+      }
+    }
+    if (!data.parkingIncluded && text.includes('box') && (text.includes('incluso') || text.includes('compreso'))) {
+      data.parkingIncluded = true;
+    }
   });
+
+  // Property state and type fallbacks from global text
+  const loweredMainText = mainInfoText.toLowerCase();
+
+  if (!data.state) {
+    if (loweredMainText.includes('ottimo stato') || loweredMainText.includes('ottime condizioni')) {
+      data.state = 'ottimo';
+    } else if (loweredMainText.includes('buono stato') || loweredMainText.includes('buone condizioni')) {
+      data.state = 'buono';
+    } else if (loweredMainText.includes('da ristrutturare')) {
+      data.state = 'da_ristrutturare';
+    } else if (loweredMainText.includes('discreto')) {
+      data.state = 'discreto';
+    }
+  }
+
+  if (!data.propertyType) {
+    if (loweredMainText.includes('signorile') || loweredMainText.includes('prestigio')) {
+      data.propertyType = 'signorile';
+    } else if (loweredMainText.includes('economico')) {
+      data.propertyType = 'economico';
+    } else if (loweredMainText.includes('ufficio')) {
+      data.propertyType = 'ufficio';
+    } else if (loweredMainText.includes('negozio') || loweredMainText.includes('commerciale')) {
+      data.propertyType = 'negozio';
+    } else {
+      data.propertyType = 'residenziale';
+    }
+  }
+
+  if (!data.energyClass) {
+    const energyMatch = loweredMainText.match(/classe\s+energetica.*?(a[1-4]|[a-g]|nc)/i);
+    if (energyMatch) {
+      data.energyClass = energyMatch[1].toUpperCase();
+    }
+  }
 
   // Estimate bedrooms if not found
   if (!data.bedrooms && data.rooms) {

@@ -33,18 +33,33 @@ export const propertySchema = z.object({
     .max(100000000, 'Prezzo massimo €100.000.000')
     .optional(),
 
+  pricePerSqm: z.number()
+    .min(0, 'Valore minimo 0')
+    .max(500000, 'Valore massimo €500.000/m²')
+    .optional(),
+
+  condoFeesMonthly: z.number()
+    .min(0, 'Valore minimo 0')
+    .max(50000, 'Valore massimo €50.000/mese')
+    .optional(),
+
   // Caratteristiche opzionali
   rooms: z.number().min(1).max(50).optional(),
   bedrooms: z.number().min(0).max(30).optional(),
   bathrooms: z.number().min(0).max(20).optional(),
   floor: z.number().min(0, 'Il piano minimo consentito è 0').max(100).optional(),
   totalFloors: z.number().min(1).max(150).optional(),
+  surfaceCommercial: z.number().min(10).max(10000).optional(),
+  surfaceUsable: z.number().min(10).max(10000).optional(),
+  energyPerformance: z.number().min(0).max(5000).optional(),
 
   // Booleani
   hasElevator: z.boolean().optional(),
   hasParking: z.boolean().optional(),
   hasBalcony: z.boolean().optional(),
   hasCellar: z.boolean().optional(),
+  hasGarden: z.boolean().optional(),
+  parkingIncluded: z.boolean().optional(),
 
   // Enumerazioni
   propertyType: z.enum(['residenziale', 'signorile', 'economico', 'ufficio', 'negozio']).optional(),
@@ -58,6 +73,10 @@ export const propertySchema = z.object({
     .optional(),
 
   // Metadata
+  orientation: z.string().optional(),
+  heating: z.string().optional(),
+  heatingType: z.string().optional(),
+  gardenType: z.string().optional(),
   title: z.string().optional(),
   description: z.string().optional(),
 }).refine(
@@ -139,17 +158,18 @@ export function getMissingFields(data: Partial<PropertyFormData>): string[] {
 export function calculateDataCompleteness(data: Partial<PropertyFormData>): number {
   const allFields: (keyof PropertyFormData)[] = [
     // Campi obbligatori
-    'address', 'city', 'surface', 'price',
+    'address', 'city', 'surface', 'price', 'pricePerSqm',
     // Caratteristiche
     'rooms', 'bedrooms', 'bathrooms', 'floor', 'totalFloors', 'yearBuilt',
+    'surfaceCommercial', 'surfaceUsable',
     // Dotazioni e servizi (boolean)
-    'hasElevator', 'hasParking', 'hasBalcony', 'hasCellar',
+    'hasElevator', 'hasParking', 'hasBalcony', 'hasCellar', 'parkingIncluded', 'hasGarden',
     // Tipologia e stato
-    'propertyType', 'state', 'energyClass',
+    'propertyType', 'state', 'energyClass', 'energyPerformance',
     // Localizzazione dettagliata
     'province', 'postalCode',
     // Informazioni aggiuntive
-    'title', 'description'
+    'orientation', 'heating', 'heatingType', 'gardenType', 'title', 'description', 'condoFeesMonthly'
   ];
 
   let filledCount = 0;

@@ -24,7 +24,8 @@
       "Bash(node test-characteristics.js:*)",
       "Bash(node test-completeness.js:*)",
       "Bash(node test-nan.js:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(.gitignore)"
     ],
     "deny": [],
     "ask": []

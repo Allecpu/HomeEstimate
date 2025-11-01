@@ -12,6 +12,158 @@ const sendBtn = document.getElementById('sendBtn');
 const copyBtn = document.getElementById('copyBtn');
 const errorMessageEl = document.getElementById('errorMessage');
 
+const FIELD_MAP = [
+  { key: 'title', label: 'Titolo' },
+  {
+    key: 'price',
+    label: 'Prezzo',
+    formatter: (value) => `\u20AC ${Number(value).toLocaleString('it-IT')}`
+  },
+  {
+    key: 'pricePerSqm',
+    label: 'Prezzo al m\u00B2',
+    formatter: (value) => `\u20AC ${Number(value).toLocaleString('it-IT')}/m\u00B2`
+  },
+  {
+    key: 'condoFeesMonthly',
+    label: 'Spese condominiali',
+    formatter: (value) => `\u20AC ${Number(value).toLocaleString('it-IT')} / mese`
+  },
+  { key: 'address', label: 'Indirizzo' },
+  { key: 'city', label: 'Citt\u00E0' },
+  { key: 'province', label: 'Provincia' },
+  { key: 'postalCode', label: 'CAP' },
+  {
+    key: 'surface',
+    label: 'Superficie',
+    formatter: (value) => `${value} m\u00B2`
+  },
+  {
+    key: 'surfaceCommercial',
+    label: 'Superficie commerciale',
+    formatter: (value) => `${value} m\u00B2`
+  },
+  {
+    key: 'surfaceUsable',
+    label: 'Superficie calpestabile',
+    formatter: (value) => `${value} m\u00B2`
+  },
+  { key: 'rooms', label: 'Locali' },
+  { key: 'bedrooms', label: 'Camere' },
+  { key: 'bathrooms', label: 'Bagni' },
+  { key: 'floor', label: 'Piano' },
+  { key: 'totalFloors', label: 'Piani edificio' },
+  { key: 'yearBuilt', label: 'Anno costruzione' },
+  {
+    key: 'hasElevator',
+    label: 'Ascensore',
+    formatter: formatBoolean
+  },
+  {
+    key: 'hasParking',
+    label: 'Parcheggio',
+    formatter: formatBoolean
+  },
+  {
+    key: 'parkingIncluded',
+    label: 'Box incluso nel prezzo',
+    formatter: formatBoolean
+  },
+  {
+    key: 'hasBalcony',
+    label: 'Balcone',
+    formatter: formatBoolean
+  },
+  {
+    key: 'hasGarden',
+    label: 'Giardino',
+    formatter: formatBoolean
+  },
+  {
+    key: 'hasCellar',
+    label: 'Cantina',
+    formatter: formatBoolean
+  },
+  { key: 'gardenType', label: 'Tipo giardino' },
+  { key: 'propertyType', label: 'Tipologia' },
+  { key: 'state', label: 'Stato' },
+  { key: 'orientation', label: 'Orientamento' },
+  { key: 'heating', label: 'Riscaldamento' },
+  { key: 'energyClass', label: 'Classe energetica' },
+  {
+    key: 'energyPerformance',
+    label: 'Prestazione energetica',
+    formatter: (value) => `${Number(value).toLocaleString('it-IT')} kWh/m\u00B2 anno`
+  },
+  { key: 'description', label: 'Descrizione' },
+  {
+    key: 'photos',
+    label: 'Foto',
+    formatter: (value) => Array.isArray(value) ? `${value.length} elemento/i` : value
+  },
+  { key: 'url', label: 'URL' },
+  { key: 'source', label: 'Fonte' }
+];
+
+function hasDisplayValue(value) {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  return true;
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function formatBoolean(value) {
+  return value ? 'S\u00EC' : 'No';
+}
+
+function renderRow(label, value) {
+  return `
+    <div class="data-item">
+      <span class="data-label">${escapeHtml(label)}:</span>
+      <span class="data-value">${escapeHtml(value)}</span>
+    </div>
+  `;
+}
+
+function renderDataPreview(data) {
+  const renderedKeys = new Set();
+  const items = [];
+
+  FIELD_MAP.forEach((field) => {
+    if (!(field.key in data)) return;
+
+    const value = data[field.key];
+    if (!hasDisplayValue(value)) {
+      renderedKeys.add(field.key);
+      return;
+    }
+
+    const displayValue = field.formatter ? field.formatter(value) : value;
+    items.push(renderRow(field.label, displayValue));
+    renderedKeys.add(field.key);
+  });
+
+  Object.entries(data).forEach(([key, value]) => {
+    if (renderedKeys.has(key)) return;
+    if (!hasDisplayValue(value)) return;
+
+    const displayValue = typeof value === 'object' ? JSON.stringify(value) : value;
+    items.push(renderRow(key, displayValue));
+  });
+
+  dataPreviewEl.innerHTML =
+    items.join('') || '<div style="text-align: center; opacity: 0.7;">Nessun dato trovato</div>';
+}
+
 // Show loading state
 function showLoading() {
   loadingEl.classList.remove('hidden');
@@ -46,50 +198,6 @@ function showError(message) {
   copyBtn.classList.add('hidden');
   errorMessageEl.classList.remove('hidden');
   errorMessageEl.textContent = message;
-}
-
-// Render data preview
-function renderDataPreview(data) {
-  const items = [];
-
-  // Basic info
-  if (data.title) items.push({ label: 'Titolo', value: data.title });
-  if (data.price) items.push({ label: 'Prezzo', value: `€ ${data.price.toLocaleString('it-IT')}` });
-
-  // Location
-  if (data.address) items.push({ label: 'Indirizzo', value: data.address });
-  if (data.city) items.push({ label: 'Città', value: data.city });
-  if (data.province) items.push({ label: 'Provincia', value: data.province });
-  if (data.postalCode) items.push({ label: 'CAP', value: data.postalCode });
-
-  // Characteristics
-  if (data.surface) items.push({ label: 'Superficie', value: `${data.surface} m²` });
-  if (data.rooms) items.push({ label: 'Locali', value: data.rooms });
-  if (data.bedrooms) items.push({ label: 'Camere', value: data.bedrooms });
-  if (data.bathrooms) items.push({ label: 'Bagni', value: data.bathrooms });
-  if (data.floor !== undefined) items.push({ label: 'Piano', value: data.floor });
-  if (data.totalFloors) items.push({ label: 'Piani edificio', value: data.totalFloors });
-  if (data.yearBuilt) items.push({ label: 'Anno costruzione', value: data.yearBuilt });
-
-  // Amenities
-  if (data.hasElevator) items.push({ label: 'Ascensore', value: 'Sì' });
-  if (data.hasParking) items.push({ label: 'Parcheggio', value: 'Sì' });
-  if (data.hasBalcony) items.push({ label: 'Balcone', value: 'Sì' });
-  if (data.hasCellar) items.push({ label: 'Cantina', value: 'Sì' });
-
-  // Property details
-  if (data.propertyType) items.push({ label: 'Tipologia', value: data.propertyType });
-  if (data.state) items.push({ label: 'Stato', value: data.state });
-  if (data.energyClass) items.push({ label: 'Classe energetica', value: data.energyClass });
-
-  const html = items.map(item => `
-    <div class="data-item">
-      <span class="data-label">${item.label}:</span>
-      <span class="data-value">${item.value}</span>
-    </div>
-  `).join('');
-
-  dataPreviewEl.innerHTML = html || '<div style="text-align: center; opacity: 0.7;">Nessun dato trovato</div>';
 }
 
 // Ensure the content script is available before messaging
@@ -195,7 +303,7 @@ async function copyToClipboard() {
     await navigator.clipboard.writeText(jsonData);
 
     // Show temporary success message
-    copyBtn.textContent = '✓ Copiato!';
+    copyBtn.textContent = '\u2713 Copiato!';
     setTimeout(() => {
       copyBtn.textContent = 'Copia Dati';
     }, 2000);

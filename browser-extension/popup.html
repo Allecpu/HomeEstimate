@@ -74,6 +74,7 @@
       margin-bottom: 8px;
       padding-bottom: 8px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      gap: 12px;
     }
 
     .data-item:last-child {
@@ -91,9 +92,8 @@
       font-weight: 400;
       text-align: right;
       max-width: 200px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      white-space: normal;
+      word-break: break-word;
     }
 
     button {
@@ -161,7 +161,7 @@
 </head>
 <body>
   <div class="header">
-    <h1>🏠 HomeEstimate</h1>
+    <h1>&#x1F3E0; HomeEstimate</h1>
     <div class="subtitle">Estrattore Annunci Immobiliari</div>
   </div>
 
@@ -172,11 +172,11 @@
     </div>
 
     <div id="success" class="status success hidden">
-      ✓ Dati estratti con successo!
+      &#x2713; Dati estratti con successo!
     </div>
 
     <div id="error" class="status error hidden">
-      ✗ Impossibile estrarre i dati
+      &#x2717; Impossibile estrarre i dati
     </div>
 
     <div id="dataPreview" class="data-preview hidden"></div>
