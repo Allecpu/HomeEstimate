@@ -52,15 +52,35 @@ function showError(message) {
 function renderDataPreview(data) {
   const items = [];
 
+  // Basic info
   if (data.title) items.push({ label: 'Titolo', value: data.title });
   if (data.price) items.push({ label: 'Prezzo', value: `€ ${data.price.toLocaleString('it-IT')}` });
+
+  // Location
   if (data.address) items.push({ label: 'Indirizzo', value: data.address });
   if (data.city) items.push({ label: 'Città', value: data.city });
+  if (data.province) items.push({ label: 'Provincia', value: data.province });
+  if (data.postalCode) items.push({ label: 'CAP', value: data.postalCode });
+
+  // Characteristics
   if (data.surface) items.push({ label: 'Superficie', value: `${data.surface} m²` });
   if (data.rooms) items.push({ label: 'Locali', value: data.rooms });
   if (data.bedrooms) items.push({ label: 'Camere', value: data.bedrooms });
   if (data.bathrooms) items.push({ label: 'Bagni', value: data.bathrooms });
   if (data.floor !== undefined) items.push({ label: 'Piano', value: data.floor });
+  if (data.totalFloors) items.push({ label: 'Piani edificio', value: data.totalFloors });
+  if (data.yearBuilt) items.push({ label: 'Anno costruzione', value: data.yearBuilt });
+
+  // Amenities
+  if (data.hasElevator) items.push({ label: 'Ascensore', value: 'Sì' });
+  if (data.hasParking) items.push({ label: 'Parcheggio', value: 'Sì' });
+  if (data.hasBalcony) items.push({ label: 'Balcone', value: 'Sì' });
+  if (data.hasCellar) items.push({ label: 'Cantina', value: 'Sì' });
+
+  // Property details
+  if (data.propertyType) items.push({ label: 'Tipologia', value: data.propertyType });
+  if (data.state) items.push({ label: 'Stato', value: data.state });
+  if (data.energyClass) items.push({ label: 'Classe energetica', value: data.energyClass });
 
   const html = items.map(item => `
     <div class="data-item">

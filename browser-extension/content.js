@@ -225,6 +225,77 @@ function extractImmobiliare() {
     }
   }
 
+  // Total Floors
+  const totalFloorsMatch = mainText.match(/Piani\s+(?:dell')?edificio:\s*(\d+)/i);
+  if (totalFloorsMatch) {
+    data.totalFloors = parseInt(totalFloorsMatch[1]);
+  }
+
+  // Year Built / Anno costruzione
+  const yearMatch = mainText.match(/Anno\s+(?:di\s+)?costruzione:\s*(\d{4})/i);
+  if (yearMatch) {
+    const year = parseInt(yearMatch[1]);
+    if (year >= 1800 && year <= new Date().getFullYear()) {
+      data.yearBuilt = year;
+    }
+  }
+
+  // Province and Postal Code
+  const provinceMatch = mainText.match(/\(([A-Z]{2})\)/);
+  if (provinceMatch) {
+    data.province = provinceMatch[1];
+  }
+
+  const postalCodeMatch = mainText.match(/\b(\d{5})\b/);
+  if (postalCodeMatch) {
+    data.postalCode = postalCodeMatch[1];
+  }
+
+  // Amenities
+  if (mainText.toLowerCase().includes('ascensore')) {
+    data.hasElevator = true;
+  }
+  if (mainText.toLowerCase().includes('box') || mainText.toLowerCase().includes('posto auto') || mainText.toLowerCase().includes('garage')) {
+    data.hasParking = true;
+  }
+  if (mainText.toLowerCase().includes('balcone') || mainText.toLowerCase().includes('terrazzo')) {
+    data.hasBalcony = true;
+  }
+  if (mainText.toLowerCase().includes('cantina')) {
+    data.hasCellar = true;
+  }
+
+  // Property State
+  const stateText = mainText.toLowerCase();
+  if (stateText.includes('ottimo stato') || stateText.includes('ottime condizioni')) {
+    data.state = 'ottimo';
+  } else if (stateText.includes('buono stato') || stateText.includes('buone condizioni')) {
+    data.state = 'buono';
+  } else if (stateText.includes('da ristrutturare')) {
+    data.state = 'da_ristrutturare';
+  } else if (stateText.includes('discreto')) {
+    data.state = 'discreto';
+  }
+
+  // Property Type
+  if (stateText.includes('signorile') || stateText.includes('prestigio')) {
+    data.propertyType = 'signorile';
+  } else if (stateText.includes('economico')) {
+    data.propertyType = 'economico';
+  } else if (stateText.includes('ufficio')) {
+    data.propertyType = 'ufficio';
+  } else if (stateText.includes('negozio') || stateText.includes('commerciale')) {
+    data.propertyType = 'negozio';
+  } else {
+    data.propertyType = 'residenziale';
+  }
+
+  // Energy Class
+  const energyMatch = mainText.match(/Classe\s+energetica:\s*(A[1-4]|[A-G]|NC)/i);
+  if (energyMatch) {
+    data.energyClass = energyMatch[1].toUpperCase();
+  }
+
   // Address and City - improved extraction from text
   // Try to find address from title first
   // Formats supported:
