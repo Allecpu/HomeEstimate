@@ -54,3 +54,5 @@ frontend/.config/
 
 # Claude local settings
 .claude/settings.local.json
+nul
+*/nul

@@ -5,9 +5,14 @@
   "description": "Estrai dati da annunci immobiliari e inviali a HomeEstimate",
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "scripting",
+    "tabs"
   ],
   "host_permissions": [
+    "https://*.idealista.it/*",
+    "https://*.immobiliare.it/*",
+    "https://*.casa.it/*",
     "http://localhost:3000/*",
     "http://localhost:8000/*"
   ],

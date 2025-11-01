@@ -92,6 +92,20 @@ function renderDataPreview(data) {
   dataPreviewEl.innerHTML = html || '<div style="text-align: center; opacity: 0.7;">Nessun dato trovato</div>';
 }
 
+// Ensure the content script is available before messaging
+async function ensureContentScript(tabId) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['content.js']
+    });
+    console.log('HomeEstimate: Content script injected on demand');
+  } catch (error) {
+    console.error('Injection error:', error);
+    throw new Error('Impossibile comunicare con la pagina. Prova a ricaricarla.');
+  }
+}
+
 // Extract data from current tab
 async function extractData() {
   showLoading();
@@ -111,7 +125,23 @@ async function extractData() {
     }
 
     // Send message to content script
-    const response = await chrome.tabs.sendMessage(tab.id, { action: 'extractData' });
+    let response;
+
+    try {
+      response = await chrome.tabs.sendMessage(tab.id, { action: 'extractData' });
+    } catch (messageError) {
+      if (
+        messageError &&
+        messageError.message &&
+        messageError.message.includes('Receiving end does not exist')
+      ) {
+        // Content script not loaded yet, inject it and retry once
+        await ensureContentScript(tab.id);
+        response = await chrome.tabs.sendMessage(tab.id, { action: 'extractData' });
+      } else {
+        throw messageError;
+      }
+    }
 
     if (response && response.success && response.data) {
       extractedData = response.data;
