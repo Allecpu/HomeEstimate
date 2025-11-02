@@ -7,7 +7,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { getPropertyTypes, getOMIZones, isCitySupported, type PropertyTypeInfo } from '@/lib/omi-api';
+import {
+  getPropertyTypes,
+  getOMIZones,
+  getCachedOMIZones,
+  isCitySupported,
+  type PropertyTypeInfo,
+} from '@/lib/omi-api';
 
 interface OMIDataFieldsProps {
   city?: string;
@@ -70,34 +76,58 @@ export function OMIDataFields({
       return;
     }
 
-    async function checkCityAndLoadZones() {
+    let cancelled = false;
+
+    const checkCityAndLoadZones = async () => {
       try {
         setIsLoadingZones(true);
         setError(null);
 
-        // Verifica se la città è supportata
+        const cachedZones = await getCachedOMIZones(city);
+        if (!cancelled && cachedZones && cachedZones.length > 0) {
+          setZones(cachedZones);
+          setCitySupported(true);
+          setIsLoadingZones(false);
+        }
+
         const supported = await isCitySupported(city);
+        if (cancelled) {
+          return;
+        }
+
         setCitySupported(supported);
 
         if (supported) {
-          // Carica le zone OMI disponibili
           const availableZones = await getOMIZones(city);
-          setZones(availableZones);
-        } else {
+          if (!cancelled) {
+            setZones(availableZones);
+          }
+        } else if (!cancelled) {
           setZones([]);
         }
       } catch (err) {
-        console.error('Errore nel caricamento zone OMI:', err);
-        setCitySupported(false);
-        setZones([]);
+        if (!cancelled) {
+          console.error('Errore nel caricamento zone OMI:', err);
+          setCitySupported(false);
+          setZones([]);
+          setError('Impossibile caricare le zone OMI');
+        }
       } finally {
-        setIsLoadingZones(false);
+        if (!cancelled) {
+          setIsLoadingZones(false);
+        }
       }
-    }
+    };
 
     // Debounce per evitare troppe richieste
-    const timeoutId = setTimeout(checkCityAndLoadZones, 500);
-    return () => clearTimeout(timeoutId);
+    const timeoutId = setTimeout(() => {
+      void checkCityAndLoadZones();
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
   }, [city]);
 
   // Applica automaticamente il tipo di immobile suggerito se il campo è vuoto o contiene il precedente suggerimento

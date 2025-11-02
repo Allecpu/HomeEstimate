@@ -110,11 +110,191 @@ export class HomeEstimateDB extends Dexie {
     this.version(3).stores({
       evaluations: '++id, createdAt, updatedAt, addressHash, city, omiZone, status, qualityScore, dataQuality, dataSource',
     });
+
+    // v4: Indice composito per cache OMI
+    this.version(4).stores({
+      omiSnapshots:
+        '++id, [comune+zona+destinazione], comune, zona, destinazione, semestre, createdAt, expiresAt, source',
+    });
   }
 }
 
 // Esporta istanza singleton
 export const db = new HomeEstimateDB();
+
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
+
+export const OMI_SNAPSHOT_DEFAULT_TTL_MS = 6 * 30 * 24 * 60 * 60 * 1000; // ~6 mesi
+export const OMI_SNAPSHOT_WILDCARD = '*';
+export const OMI_SNAPSHOT_ZONE_KEY = '__zone_list__';
+
+interface SerializedSnapshotPayload<T> {
+  version: 1;
+  fetchedAt: number;
+  payload: T;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface OMISnapshotKey {
+  comune: string;
+  zona?: string | null;
+  destinazione?: string | null;
+}
+
+export interface OMISnapshotResult<TPayload> {
+  row: OMISnapshotRow;
+  payload: SerializedSnapshotPayload<TPayload>;
+}
+
+function normalizeSnapshotKeyPart(value: string | null | undefined): string {
+  if (!value) {
+    return OMI_SNAPSHOT_WILDCARD;
+  }
+
+  return value.trim().toLowerCase() || OMI_SNAPSHOT_WILDCARD;
+}
+
+function serializeSnapshotPayload(payload: SerializedSnapshotPayload<unknown>): ArrayBuffer {
+  const encoded = textEncoder.encode(JSON.stringify(payload));
+  return encoded.buffer.slice(encoded.byteOffset, encoded.byteOffset + encoded.byteLength);
+}
+
+function deserializeSnapshotPayload<T>(buffer: ArrayBuffer): SerializedSnapshotPayload<T> {
+  const json = textDecoder.decode(new Uint8Array(buffer));
+  const parsed = JSON.parse(json) as SerializedSnapshotPayload<T>;
+
+  if (!parsed || parsed.version !== 1 || typeof parsed.fetchedAt !== 'number') {
+    throw new Error('Invalid snapshot payload structure');
+  }
+
+  return parsed;
+}
+
+export async function getOMISnapshot<TPayload = unknown>(
+  key: OMISnapshotKey
+): Promise<OMISnapshotResult<TPayload> | null> {
+  const comune = normalizeSnapshotKeyPart(key.comune);
+  const zona = normalizeSnapshotKeyPart(key.zona ?? null);
+  const destinazione = normalizeSnapshotKeyPart(key.destinazione ?? null);
+
+  try {
+    const snapshot = await db.omiSnapshots
+      .where('[comune+zona+destinazione]')
+      .equals([comune, zona, destinazione])
+      .first();
+
+    if (!snapshot) {
+      return null;
+    }
+
+    if (snapshot.expiresAt <= Date.now()) {
+      if (snapshot.id) {
+        await db.omiSnapshots.delete(snapshot.id);
+      }
+      return null;
+    }
+
+    const payload = deserializeSnapshotPayload<TPayload>(snapshot.encryptedPayload);
+    return { row: snapshot, payload };
+  } catch (error) {
+    console.warn('Failed to load OMI snapshot, removing entry', error);
+    const staleSnapshot = await db.omiSnapshots
+      .where('[comune+zona+destinazione]')
+      .equals([comune, zona, destinazione])
+      .first();
+
+    if (staleSnapshot?.id) {
+      await db.omiSnapshots.delete(staleSnapshot.id);
+    }
+
+    return null;
+  }
+}
+
+export async function saveOMISnapshot<TPayload>(params: {
+  key: OMISnapshotKey;
+  payload: SerializedSnapshotPayload<TPayload>['payload'];
+  metadata?: SerializedSnapshotPayload<TPayload>['metadata'];
+  semestre?: string;
+  source?: string;
+  ttlMs?: number;
+}) {
+  const comune = normalizeSnapshotKeyPart(params.key.comune);
+  const zona = normalizeSnapshotKeyPart(params.key.zona ?? null);
+  const destinazione = normalizeSnapshotKeyPart(params.key.destinazione ?? null);
+  const now = Date.now();
+  const expiresAt = now + (params.ttlMs ?? OMI_SNAPSHOT_DEFAULT_TTL_MS);
+  const payload: SerializedSnapshotPayload<TPayload> = {
+    version: 1,
+    fetchedAt: now,
+    payload: params.payload,
+    metadata: params.metadata ?? null,
+  };
+
+  const buffer = serializeSnapshotPayload(payload);
+
+  await db.transaction('rw', db.omiSnapshots, async () => {
+    const existing = await db.omiSnapshots
+      .where('[comune+zona+destinazione]')
+      .equals([comune, zona, destinazione])
+      .first();
+
+    const row: Partial<OMISnapshotRow> = {
+      comune,
+      zona,
+      destinazione,
+      semestre: params.semestre ?? existing?.semestre ?? 'n/a',
+      source: params.source ?? existing?.source ?? 'omi-api',
+      createdAt: now,
+      expiresAt,
+      encryptedPayload: buffer,
+    };
+
+    if (existing?.id) {
+      await db.omiSnapshots.update(existing.id, row);
+    } else {
+      await db.omiSnapshots.add(row as OMISnapshotRow);
+    }
+  });
+}
+
+export async function getLatestOMISnapshotByCity<TPayload = unknown>(
+  comune: string,
+  filter?: (row: OMISnapshotRow) => boolean
+): Promise<OMISnapshotResult<TPayload> | null> {
+  const normalizedComune = normalizeSnapshotKeyPart(comune);
+  const now = Date.now();
+
+  const entries = await db.omiSnapshots
+    .where('comune')
+    .equals(normalizedComune)
+    .and((row) => row.expiresAt > now)
+    .sortBy('createdAt');
+
+  while (entries.length > 0) {
+    const candidate = entries.pop();
+    if (!candidate) {
+      break;
+    }
+
+    if (filter && !filter(candidate)) {
+      continue;
+    }
+
+    try {
+      const payload = deserializeSnapshotPayload<TPayload>(candidate.encryptedPayload);
+      return { row: candidate, payload };
+    } catch (error) {
+      console.warn('Failed to parse latest OMI snapshot, deleting entry', error);
+      if (candidate.id) {
+        await db.omiSnapshots.delete(candidate.id);
+      }
+    }
+  }
+
+  return null;
+}
 
 // Helper per gestire quota exceeded
 export async function handleQuotaExceeded() {
@@ -155,4 +335,16 @@ export async function autoCleanup() {
 // Esegui cleanup al caricamento
 if (typeof window !== 'undefined') {
   autoCleanup();
+
+  if (!window.__homeEstimateCleanupInterval) {
+    window.__homeEstimateCleanupInterval = window.setInterval(() => {
+      autoCleanup().catch((error) => console.error('Scheduled cleanup failed:', error));
+    }, 6 * 60 * 60 * 1000); // ogni 6 ore
+  }
+}
+
+declare global {
+  interface Window {
+    __homeEstimateCleanupInterval?: number;
+  }
 }
