@@ -42,7 +42,8 @@
       "Bash(.\\venv\\Scripts\\python.exe:*)",
       "Bash(where:*)",
       "Bash(python -m py_compile:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(.venvScriptspython.exe test_omi_integration.py)"
     ],
     "deny": [],
     "ask": []

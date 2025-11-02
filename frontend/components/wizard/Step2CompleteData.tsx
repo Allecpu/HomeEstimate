@@ -15,6 +15,7 @@ import { propertySchema, type PropertyFormData, getMissingFields, calculateDataC
 import { Progress } from '@/components/ui/progress';
 import type { PhotoConditionLabel, PhotoConditionResult } from '@/lib/photo-analysis';
 import { analyzePhotoConditionFromStorage, getSavedAnalysis } from '@/lib/photo-analysis';
+import { OMIDataFields } from '@/components/wizard/OMIDataFields';
 
 const PHOTO_CONDITION_LABELS: Record<PhotoConditionLabel, string> = {
   da_ristrutturare: 'Da ristrutturare',
@@ -496,7 +497,7 @@ const onSubmit = (data: PropertyFormData) => {
                 Completa i Dati dell&apos;Immobile
               </CardTitle>
               <CardDescription>
-                I campi evidenziati sono obbligatori. PiÃ¹ dati fornisci, piÃ¹ accurata sarÃ  la stima.
+                I campi evidenziati sono obbligatori. Piu dati fornisci, piu accurata sara la stima.
               </CardDescription>
             </div>
             <div className="text-right">
@@ -546,7 +547,7 @@ const onSubmit = (data: PropertyFormData) => {
 
             <div className="space-y-2">
               <Label htmlFor="city">
-                CittÃ  <span className="text-red-500">*</span>
+                Citta <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="city"
@@ -561,7 +562,7 @@ const onSubmit = (data: PropertyFormData) => {
 
             <div className="space-y-2">
               <Label htmlFor="surface">
-                Superficie (mÂ²) <span className="text-red-500">*</span>
+                Superficie (m^2) <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="surface"
@@ -579,7 +580,7 @@ const onSubmit = (data: PropertyFormData) => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="price">Prezzo Richiesto (â‚¬)</Label>
+              <Label htmlFor="price">Prezzo Richiesto (EUR)</Label>
               <Controller
                 name="price"
                 control={control}
@@ -600,7 +601,7 @@ const onSubmit = (data: PropertyFormData) => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="pricePerSqm">Prezzo al mÂ² (â‚¬)</Label>
+              <Label htmlFor="pricePerSqm">Prezzo al m^2 (EUR)</Label>
               <Input
                 id="pricePerSqm"
                 type="number"
@@ -611,7 +612,7 @@ const onSubmit = (data: PropertyFormData) => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="condoFeesMonthly">Spese condominiali (â‚¬/mese)</Label>
+              <Label htmlFor="condoFeesMonthly">Spese condominiali (EUR/mese)</Label>
               <Controller
                 name="condoFeesMonthly"
                 control={control}
@@ -714,7 +715,7 @@ const onSubmit = (data: PropertyFormData) => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="surfaceCommercial">Superficie commerciale (mÂ²)</Label>
+              <Label htmlFor="surfaceCommercial">Superficie commerciale (m^2)</Label>
               <Input
                 id="surfaceCommercial"
                 type="text"
@@ -727,7 +728,7 @@ const onSubmit = (data: PropertyFormData) => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="surfaceUsable">Superficie calpestabile (mÂ²)</Label>
+              <Label htmlFor="surfaceUsable">Superficie calpestabile (m^2)</Label>
               <Input
                 id="surfaceUsable"
                 type="text"
@@ -1118,7 +1119,7 @@ const onSubmit = (data: PropertyFormData) => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="energyPerformance">Prestazione energetica (kWh/mÂ² anno)</Label>
+              <Label htmlFor="energyPerformance">Prestazione energetica (kWh/m^2 anno)</Label>
               <Input
                 id="energyPerformance"
                 type="text"
@@ -1158,6 +1159,27 @@ const onSubmit = (data: PropertyFormData) => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Dati OMI */}
+        <Controller
+          name="propertyTypeOMI"
+          control={control}
+          render={({ field: propertyTypeField }) => (
+            <Controller
+              name="zonaOMI"
+              control={control}
+              render={({ field: zonaOMIField }) => (
+                <OMIDataFields
+                  city={useWatch({ control, name: 'city' })}
+                  propertyTypeOMI={propertyTypeField.value}
+                  zonaOMI={zonaOMIField.value}
+                  onPropertyTypeChange={propertyTypeField.onChange}
+                  onZonaOMIChange={zonaOMIField.onChange}
+                />
+              )}
+            />
+          )}
+        />
 
         {/* Azioni */}
         <div className="flex gap-4">

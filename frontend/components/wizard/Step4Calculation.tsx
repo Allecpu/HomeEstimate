@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Calculator, CheckCircle2, AlertCircle, Loader2, MapPin, Home } from 'lucide-react';
+import { Calculator, CheckCircle2, AlertCircle, Loader2, MapPin, Home, Building2, Info } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
 import { PropertyFormData } from '@/lib/validation';
 
 interface Step4Props {
@@ -20,6 +21,16 @@ interface EstimationResult {
   confidence: number;
   comparables: number;
   marketTrend: string;
+  omiData?: {
+    comune: string;
+    zona?: string;
+    valoreMin: number;
+    valoreMax: number;
+    valoreNormale: number;
+    semestre: string;
+    stato_conservazione?: string;
+    fonte: string;
+  };
 }
 
 export function Step4Calculation({ onNext, onBack, propertyData }: Step4Props) {
@@ -56,7 +67,7 @@ export function Step4Calculation({ onNext, onBack, propertyData }: Step4Props) {
         await new Promise(resolve => setTimeout(resolve, stepInfo.duration));
       }
 
-      // Call backend API
+      // Call backend API with OMI data
       const response = await fetch('http://localhost:8000/api/valuation/evaluate', {
         method: 'POST',
         headers: {
@@ -65,6 +76,7 @@ export function Step4Calculation({ onNext, onBack, propertyData }: Step4Props) {
         body: JSON.stringify({
           address: propertyData.address,
           city: propertyData.city,
+          province: propertyData.province,
           surface: propertyData.surface,
           price: propertyData.price,
           rooms: propertyData.rooms,
@@ -73,6 +85,9 @@ export function Step4Calculation({ onNext, onBack, propertyData }: Step4Props) {
           floor: propertyData.floor,
           latitude: propertyData.lat,
           longitude: propertyData.lng,
+          // Dati OMI per valutazione più accurata
+          property_type: propertyData.propertyTypeOMI,
+          zona_omi: propertyData.zonaOMI,
         }),
       });
 
@@ -82,7 +97,7 @@ export function Step4Calculation({ onNext, onBack, propertyData }: Step4Props) {
 
       const data = await response.json();
 
-      // Set result
+      // Set result with OMI data
       const estimationResult: EstimationResult = {
         estimatedValue: data.estimatedValue || 0,
         pricePerSqm: data.priceM2 || 0,
@@ -90,6 +105,7 @@ export function Step4Calculation({ onNext, onBack, propertyData }: Step4Props) {
         comparables: data.comparables?.length || 0,
         marketTrend: data.marketPosition === 'in_linea' ? 'stabile' :
                      data.marketPosition === 'sopra_mercato' ? 'crescente' : 'decrescente',
+        omiData: data.omiData || undefined,
       };
 
       setResult(estimationResult);
@@ -213,8 +229,31 @@ export function Step4Calculation({ onNext, onBack, propertyData }: Step4Props) {
                 <CheckCircle2 className="h-4 w-4 text-green-600" />
                 <AlertDescription className="ml-2 text-green-800">
                   Stima completata con successo!
+                  {result.omiData && (
+                    <Badge variant="secondary" className="ml-2">
+                      <Building2 className="w-3 h-3 mr-1" />
+                      Dati OMI: {result.omiData.fonte}
+                    </Badge>
+                  )}
                 </AlertDescription>
               </Alert>
+
+              {/* OMI Data Info */}
+              {result.omiData && result.omiData.fonte === 'OMI - Dati reali' && (
+                <Alert className="bg-blue-50 border-blue-200">
+                  <Info className="h-4 w-4 text-blue-600" />
+                  <AlertDescription className="ml-2 text-blue-800">
+                    <strong>Dati OMI utilizzati:</strong> La valutazione include quotazioni ufficiali
+                    dell&apos;Osservatorio del Mercato Immobiliare per una stima più accurata.
+                    {result.omiData.zona && (
+                      <span className="block mt-1 text-sm">
+                        Zona: {result.omiData.zona} •
+                        Range: €{result.omiData.valoreMin.toLocaleString('it-IT')} - €{result.omiData.valoreMax.toLocaleString('it-IT')}/m²
+                      </span>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
 
               {/* Main Result */}
               <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">

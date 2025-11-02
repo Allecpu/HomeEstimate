@@ -67,6 +67,10 @@ export const propertySchema = z.object({
   state: z.enum(['ottimo', 'buono', 'discreto', 'da_ristrutturare']).optional(),
   energyClass: z.enum(['A4', 'A3', 'A2', 'A1', 'B', 'C', 'D', 'E', 'F', 'G', 'NC']).optional(),
 
+  // Dati OMI (Osservatorio Mercato Immobiliare)
+  propertyTypeOMI: z.string().optional(), // Tipo immobile per API OMI (es. "appartamento", "villa")
+  zonaOMI: z.string().optional(), // Zona OMI del comune (es. "B12", "C1")
+
   // Anno costruzione
   yearBuilt: z.number()
     .min(1800, 'Anno minimo: 1800')
@@ -168,7 +172,9 @@ export function calculateDataCompleteness(data: Partial<PropertyFormData>): numb
     // Tipologia e stato
     'propertyType', 'state', 'energyClass', 'energyPerformance',
     // Informazioni aggiuntive
-    'orientation', 'heating', 'heatingType', 'gardenType', 'title', 'description', 'condoFeesMonthly'
+    'orientation', 'heating', 'heatingType', 'gardenType', 'title', 'description', 'condoFeesMonthly',
+    // Dati OMI
+    'propertyTypeOMI', 'zonaOMI'
   ];
 
   let filledCount = 0;

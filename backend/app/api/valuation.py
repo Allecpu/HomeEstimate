@@ -1,8 +1,10 @@
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+
+from app.omi import get_omi_client, PropertyType, get_property_type
 
 router = APIRouter()
 
@@ -171,6 +173,8 @@ class PropertyInput(BaseModel):
     floor: Optional[int] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    property_type: Optional[str] = None  # Tipo di immobile (es. "appartamento", "villa", ecc.)
+    zona_omi: Optional[str] = None  # Zona OMI specifica
 
 
 class Comparable(BaseModel):
@@ -186,11 +190,13 @@ class Comparable(BaseModel):
 
 class OMIData(BaseModel):
     comune: str
-    zona: str
+    zona: Optional[str] = None
     valoreMin: float
     valoreMax: float
     valoreNormale: float
     semestre: str
+    stato_conservazione: Optional[str] = None
+    fonte: str = "OMI"  # Fonte dei dati
 
 
 class ValuationResponse(BaseModel):
@@ -210,32 +216,115 @@ class ValuationResponse(BaseModel):
 
 @router.post("/evaluate", response_model=ValuationResponse)
 async def evaluate_property(property_data: PropertyInput):
-    price_per_sqm = _adjust_price_per_sqm(property_data)
+    """
+    Valuta un immobile utilizzando dati OMI reali e algoritmi proprietari.
+
+    Args:
+        property_data: Dati dell'immobile da valutare
+
+    Returns:
+        Stima completa del valore con dati OMI
+    """
+    # Calcola il prezzo base con l'algoritmo proprietario
+    price_per_sqm_base = _adjust_price_per_sqm(property_data)
+
+    # Prova a ottenere dati OMI reali
+    omi_client = get_omi_client()
+    omi_data_model = None
+    price_per_sqm_omi = None
+
+    try:
+        # Determina il tipo di immobile OMI
+        property_type_omi = None
+        if property_data.property_type:
+            property_type_omi = get_property_type(property_data.property_type)
+
+        # Interroga le API OMI con 1 mq per ottenere il prezzo al mq
+        omi_response = await omi_client.query(
+            city=property_data.city,
+            metri_quadri=1.0,  # Richiedi per 1 mq per ottenere prezzo al mq
+            operazione="acquisto",
+            zona_omi=property_data.zona_omi,
+            tipo_immobile=property_type_omi,
+        )
+
+        if omi_response and omi_response.quotations:
+            # Usa la prima quotazione disponibile (o quella del tipo specificato)
+            quotation = omi_response.quotations[0]
+
+            # Cerca la quotazione migliore per il tipo specificato
+            if property_type_omi:
+                for q in omi_response.quotations:
+                    if q.property_type == property_type_omi.value:
+                        quotation = q
+                        break
+
+            # I prezzi sono già al mq (richiesta con metri_quadri=1)
+            if quotation.prezzo_acquisto_medio and quotation.prezzo_acquisto_medio > 0:
+                price_per_sqm_omi = quotation.prezzo_acquisto_medio
+
+                # Crea il modello OMI con dati reali
+                omi_data_model = OMIData(
+                    comune=property_data.city.title(),
+                    zona=quotation.zona_omi if quotation.zona_omi else "Intero comune",
+                    valoreMin=round(quotation.prezzo_acquisto_min or price_per_sqm_omi * 0.9, 0),
+                    valoreMax=round(quotation.prezzo_acquisto_max or price_per_sqm_omi * 1.1, 0),
+                    valoreNormale=round(price_per_sqm_omi, 0),
+                    semestre=f"{datetime.now().year}-S{1 if datetime.now().month <= 6 else 2}",
+                    stato_conservazione=quotation.stato_conservazione,
+                    fonte="OMI - Dati reali"
+                )
+
+    except Exception as e:
+        print(f"Errore nel recupero dati OMI: {e}")
+        # Continua con i dati calcolati
+
+    # Determina il prezzo finale al mq
+    if price_per_sqm_omi and price_per_sqm_omi > 0:
+        # Combina il prezzo OMI con quello calcolato (peso 70% OMI, 30% algoritmo)
+        price_per_sqm = price_per_sqm_omi * 0.7 + price_per_sqm_base * 0.3
+        confidence_boost = 15  # Maggiore confidenza con dati OMI reali
+    else:
+        # Usa solo il prezzo calcolato
+        price_per_sqm = price_per_sqm_base
+        confidence_boost = 0
+
+        # Crea dati OMI stimati se non disponibili
+        if not omi_data_model:
+            omi_value_min = price_per_sqm * 0.9
+            omi_value_max = price_per_sqm * 1.1
+            omi_data_model = OMIData(
+                comune=property_data.city.title(),
+                zona="Stima",
+                valoreMin=round(omi_value_min, 0),
+                valoreMax=round(omi_value_max, 0),
+                valoreNormale=round(price_per_sqm, 0),
+                semestre=f"{datetime.now().year}-S{1 if datetime.now().month <= 6 else 2}",
+                fonte="Algoritmo proprietario"
+            )
+
+    # Calcola il valore stimato
     estimated_value = price_per_sqm * property_data.surface
 
-    confidence = _calculate_confidence(property_data)
+    # Calcola la confidenza
+    confidence = _calculate_confidence(property_data) + confidence_boost
+    confidence = min(confidence, 95)  # Cap a 95
+
+    # Calcola il range di stima
     spread = max(0.08, 0.18 - (confidence - 55) * 0.002)
     estimated_min = estimated_value * (1 - spread)
     estimated_max = estimated_value * (1 + spread)
 
+    # Determina la posizione di mercato
     market_position = _build_market_position(estimated_value, property_data.price)
     deviation = None
     if property_data.price:
         deviation = ((property_data.price - estimated_value) / estimated_value) * 100
 
+    # Genera comparables
     comparables = _build_comparables(property_data, price_per_sqm)
 
-    omi_value_min = price_per_sqm * 0.9
-    omi_value_max = price_per_sqm * 1.1
-    omi_data = OMIData(
-        comune=property_data.city,
-        zona="B1",
-        valoreMin=round(omi_value_min, 0),
-        valoreMax=round(omi_value_max, 0),
-        valoreNormale=round(price_per_sqm, 0),
-        semestre=f"{datetime.now().year}-S{1 if datetime.now().month <= 6 else 2}",
-    )
-
+    # Calcola quality score
     quality_score = min(95, int(confidence + 8))
 
     return ValuationResponse(
@@ -248,7 +337,7 @@ async def evaluate_property(property_data: PropertyInput):
         qualityScore=quality_score,
         deviation=deviation,
         marketPosition=market_position,
-        omiData=omi_data,
+        omiData=omi_data_model,
         comparables=comparables,
         createdAt=datetime.now(),
     )

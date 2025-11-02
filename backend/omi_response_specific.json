@@ -1,0 +1,338 @@
+{
+  "B12": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 830000.0,
+      "prezzo_acquisto_max": 1080000.0,
+      "prezzo_acquisto_medio": 955000.0
+    }
+  },
+  "B13": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 630000.0,
+      "prezzo_acquisto_max": 800000.0,
+      "prezzo_acquisto_medio": 715000.0
+    }
+  },
+  "B15": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 800000.0,
+      "prezzo_acquisto_max": 1040000.0,
+      "prezzo_acquisto_medio": 920000.0
+    }
+  },
+  "B16": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "ottimo",
+      "prezzo_acquisto_min": 930000.0,
+      "prezzo_acquisto_max": 1200000.0,
+      "prezzo_acquisto_medio": 1065000.0
+    }
+  },
+  "B17": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "ottimo",
+      "prezzo_acquisto_min": 750000.0,
+      "prezzo_acquisto_max": 1050000.0,
+      "prezzo_acquisto_medio": 900000.0
+    }
+  },
+  "B18": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 600000.0,
+      "prezzo_acquisto_max": 850000.0,
+      "prezzo_acquisto_medio": 725000.0
+    }
+  },
+  "B19": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "ottimo",
+      "prezzo_acquisto_min": 870000.0,
+      "prezzo_acquisto_max": 1100000.0,
+      "prezzo_acquisto_medio": 985000.0
+    }
+  },
+  "B20": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 520000.0,
+      "prezzo_acquisto_max": 730000.0,
+      "prezzo_acquisto_medio": 625000.0
+    }
+  },
+  "B21": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 490000.0,
+      "prezzo_acquisto_max": 700000.0,
+      "prezzo_acquisto_medio": 595000.0
+    }
+  },
+  "C12": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 520000.0,
+      "prezzo_acquisto_max": 710000.0,
+      "prezzo_acquisto_medio": 615000.0
+    }
+  },
+  "C13": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "ottimo",
+      "prezzo_acquisto_min": 900000.0,
+      "prezzo_acquisto_max": 1300000.0,
+      "prezzo_acquisto_medio": 1100000.0
+    }
+  },
+  "C14": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "ottimo",
+      "prezzo_acquisto_min": 980000.0,
+      "prezzo_acquisto_max": 1450000.0,
+      "prezzo_acquisto_medio": 1215000.0
+    }
+  },
+  "C15": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "ottimo",
+      "prezzo_acquisto_min": 560000.0,
+      "prezzo_acquisto_max": 750000.0,
+      "prezzo_acquisto_medio": 655000.0
+    }
+  },
+  "C16": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 420000.0,
+      "prezzo_acquisto_max": 590000.0,
+      "prezzo_acquisto_medio": 505000.0
+    }
+  },
+  "C17": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 550000.0,
+      "prezzo_acquisto_max": 700000.0,
+      "prezzo_acquisto_medio": 625000.0
+    }
+  },
+  "C18": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 450000.0,
+      "prezzo_acquisto_max": 570000.0,
+      "prezzo_acquisto_medio": 510000.0
+    }
+  },
+  "C19": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 420000.0,
+      "prezzo_acquisto_max": 590000.0,
+      "prezzo_acquisto_medio": 505000.0
+    }
+  },
+  "C20": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 420000.0,
+      "prezzo_acquisto_max": 620000.0,
+      "prezzo_acquisto_medio": 520000.0
+    }
+  },
+  "D10": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 280000.0,
+      "prezzo_acquisto_max": 420000.0,
+      "prezzo_acquisto_medio": 350000.0
+    }
+  },
+  "D12": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 360000.0,
+      "prezzo_acquisto_max": 570000.0,
+      "prezzo_acquisto_medio": 465000.0
+    }
+  },
+  "D13": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 290000.0,
+      "prezzo_acquisto_max": 400000.0,
+      "prezzo_acquisto_medio": 345000.0
+    }
+  },
+  "D16": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 300000.0,
+      "prezzo_acquisto_max": 430000.0,
+      "prezzo_acquisto_medio": 365000.0
+    }
+  },
+  "D18": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 280000.0,
+      "prezzo_acquisto_max": 400000.0,
+      "prezzo_acquisto_medio": 340000.0
+    }
+  },
+  "D20": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 290000.0,
+      "prezzo_acquisto_max": 410000.0,
+      "prezzo_acquisto_medio": 350000.0
+    }
+  },
+  "D21": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 250000.0,
+      "prezzo_acquisto_max": 380000.0,
+      "prezzo_acquisto_medio": 315000.0
+    }
+  },
+  "D24": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 340000.0,
+      "prezzo_acquisto_max": 430000.0,
+      "prezzo_acquisto_medio": 385000.0
+    }
+  },
+  "D25": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 270000.0,
+      "prezzo_acquisto_max": 340000.0,
+      "prezzo_acquisto_medio": 305000.0
+    }
+  },
+  "D28": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 320000.0,
+      "prezzo_acquisto_max": 420000.0,
+      "prezzo_acquisto_medio": 370000.0
+    }
+  },
+  "D31": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 290000.0,
+      "prezzo_acquisto_max": 430000.0,
+      "prezzo_acquisto_medio": 360000.0
+    }
+  },
+  "D32": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 250000.0,
+      "prezzo_acquisto_max": 330000.0,
+      "prezzo_acquisto_medio": 290000.0
+    }
+  },
+  "D33": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 290000.0,
+      "prezzo_acquisto_max": 390000.0,
+      "prezzo_acquisto_medio": 340000.0
+    }
+  },
+  "D34": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 300000.0,
+      "prezzo_acquisto_max": 410000.0,
+      "prezzo_acquisto_medio": 355000.0
+    }
+  },
+  "D35": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 265000.0,
+      "prezzo_acquisto_max": 400000.0,
+      "prezzo_acquisto_medio": 332500.0
+    }
+  },
+  "D36": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 330000.0,
+      "prezzo_acquisto_max": 460000.0,
+      "prezzo_acquisto_medio": 395000.0
+    }
+  },
+  "D37": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 270000.0,
+      "prezzo_acquisto_max": 360000.0,
+      "prezzo_acquisto_medio": 315000.0
+    }
+  },
+  "D38": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 300000.0,
+      "prezzo_acquisto_max": 400000.0,
+      "prezzo_acquisto_medio": 350000.0
+    }
+  },
+  "D39": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "ottimo",
+      "prezzo_acquisto_min": 430000.0,
+      "prezzo_acquisto_max": 520000.0,
+      "prezzo_acquisto_medio": 475000.0
+    }
+  },
+  "D40": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 265000.0,
+      "prezzo_acquisto_max": 370000.0,
+      "prezzo_acquisto_medio": 317500.0
+    }
+  },
+  "E5": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 230000.0,
+      "prezzo_acquisto_max": 300000.0,
+      "prezzo_acquisto_medio": 265000.0
+    }
+  },
+  "E6": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 250000.0,
+      "prezzo_acquisto_max": 300000.0,
+      "prezzo_acquisto_medio": 275000.0
+    }
+  },
+  "E7": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 190000.0,
+      "prezzo_acquisto_max": 245000.0,
+      "prezzo_acquisto_medio": 217500.0
+    }
+  },
+  "E8": {
+    "abitazioni_civili": {
+      "stato_di_conservazione_mediano_della_zona": "normale",
+      "prezzo_acquisto_min": 185000.0,
+      "prezzo_acquisto_max": 255000.0,
+      "prezzo_acquisto_medio": 220000.0
+    }
+  }
+}
