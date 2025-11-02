@@ -9,7 +9,7 @@ HomeEstimate integra le API OMI (Osservatorio del Mercato Immobiliare) per forni
 ```
 backend/app/omi/
 ├── __init__.py           # Exports pubblici del modulo
-├── cadastral_codes.py    # Codici catastali comuni italiani (108 città)
+├── cadastral_codes.py    # Codici catastali comuni italiani (242 città)
 ├── property_types.py     # Tipi di immobile supportati da OMI
 └── client.py            # Client HTTP per interrogare le API OMI
 ```
@@ -32,7 +32,7 @@ from app.omi import get_cadastral_code
 code = get_cadastral_code("Milano")  # Returns "F205"
 ```
 
-**Comuni supportati:** 108 città principali italiane in tutte le regioni.
+**Comuni supportati:** 242 città italiane, con copertura completa di Lombardia (~90 comuni) e Piemonte (~45 comuni), oltre a tutti i capoluoghi nazionali.
 
 ### 2. Tipi di Immobile (`property_types.py`)
 
@@ -347,14 +347,14 @@ cd backend
 ```
 
 Il test verifica:
-- ✓ Codici catastali (108 comuni)
+- ✓ Codici catastali (242 comuni)
 - ✓ Tipi di immobile (17 tipi)
 - ✓ Query API OMI reali
 - ✓ Sistema di cache
 
 ## Limitazioni e Note
 
-1. **Comuni supportati**: Attualmente 108 città principali. Per comuni non in lista, l'API restituisce un errore 400.
+1. **Comuni supportati**: Attualmente 242 città, inclusa copertura completa di Lombardia e Piemonte. Per comuni non in lista, l'API restituisce un errore 400.
 
 2. **Zone OMI**: Le zone sono assegnate dall'Agenzia delle Entrate. Senza specificare una zona, vengono restituite tutte le zone del comune.
 

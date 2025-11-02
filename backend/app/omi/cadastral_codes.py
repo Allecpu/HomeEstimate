@@ -7,7 +7,7 @@ from typing import Dict, Optional
 
 # Dizionario dei codici catastali dei comuni italiani più rilevanti
 CADASTRAL_CODES: Dict[str, str] = {
-    # Lombardia
+    # Lombardia - Capoluoghi e città principali
     "milano": "F205",
     "bergamo": "A794",
     "brescia": "B157",
@@ -20,6 +20,112 @@ CADASTRAL_CODES: Dict[str, str] = {
     "pavia": "G388",
     "sondrio": "I822",
     "varese": "L682",
+
+    # Lombardia - Altri comuni importanti
+    # Provincia di Milano
+    "rho": "H264",
+    "sesto san giovanni": "I687",
+    "cinisello balsamo": "C707",
+    "legnano": "E514",
+    "abbiategrasso": "A010",
+    "magenta": "E801",
+    "corbetta": "C986",
+    "melzo": "F120",
+    "gorgonzola": "E094",
+    "segrate": "I577",
+    "cologno monzese": "C895",
+    "san donato milanese": "H827",
+    "corsico": "D045",
+    "rozzano": "H623",
+    "opera": "G078",
+    "buccinasco": "B240",
+    "san giuliano milanese": "H930",
+    "pioltello": "G686",
+    "vimodrone": "M053",
+    "peschiera borromeo": "G488",
+
+    # Provincia di Monza e Brianza
+    "desio": "D286",
+    "seregno": "I625",
+    "lissone": "E617",
+    "cesano maderno": "C566",
+    "limbiate": "E591",
+    "vimercate": "M052",
+    "carate brianza": "B729",
+    "brugherio": "B212",
+    "giussano": "E062",
+    "muggio": "F797",
+
+    # Provincia di Bergamo
+    "treviglio": "L400",
+    "seriate": "I628",
+    "dalmine": "D245",
+    "romano di lombardia": "H511",
+    "albino": "A162",
+    "alzano lombardo": "A246",
+    "caravaggio": "B731",
+    "stezzano": "I951",
+    "ponte san pietro": "G854",
+    "trescore balneario": "L386",
+
+    # Provincia di Brescia
+    "desenzano del garda": "D284",
+    "montichiari": "F471",
+    "lumezzane": "E738",
+    "chiari": "C618",
+    "rezzato": "H256",
+    "ghedi": "E024",
+    "palazzolo sull'oglio": "G284",
+    "manerbio": "E879",
+    "orzinuovi": "G149",
+    "rovato": "H598",
+
+    # Provincia di Como
+    "erba": "D416",
+    "cantù": "B639",
+    "mariano comense": "E951",
+    "olgiate comasco": "G030",
+    "lomazzo": "E661",
+    "menaggio": "F120",
+    "cernobbio": "C520",
+
+    # Provincia di Varese
+    "busto arsizio": "B300",
+    "gallarate": "D869",
+    "saronno": "I441",
+    "tradate": "L319",
+    "luino": "E734",
+    "castellanza": "C139",
+    "somma lombardo": "I819",
+    "malnate": "E863",
+    "cassano magnago": "C004",
+
+    # Provincia di Pavia
+    "vigevano": "L872",
+    "voghera": "M109",
+    "mortara": "F754",
+    "stradella": "I969",
+
+    # Provincia di Cremona
+    "crema": "D142",
+    "casalmaggiore": "B898",
+
+    # Provincia di Mantova
+    "castiglione delle stiviere": "C312",
+    "suzzara": "L020",
+    "viadana": "L826",
+
+    # Provincia di Lecco
+    "merate": "F133",
+    "calolziocorte": "B423",
+
+    # Provincia di Lodi
+    "codogno": "C816",
+    "sant'angelo lodigiano": "I274",
+
+    # Provincia di Sondrio
+    "tirano": "L175",
+    "morbegno": "F712",
 
     # Lazio
     "roma": "H501",
@@ -35,7 +141,7 @@ CADASTRAL_CODES: Dict[str, str] = {
     "caserta": "B963",
     "salerno": "H703",
 
-    # Piemonte
+    # Piemonte - Capoluoghi
     "torino": "L219",
     "alessandria": "A182",
     "asti": "A479",
@@ -44,6 +150,76 @@ CADASTRAL_CODES: Dict[str, str] = {
     "novara": "F952",
     "verbania": "L746",
     "vercelli": "L750",
+
+    # Piemonte - Altri comuni importanti
+    # Provincia di Torino
+    "moncalieri": "F335",
+    "rivoli": "H355",
+    "collegno": "C860",
+    "settimo torinese": "I703",
+    "nichelino": "F889",
+    "venaria reale": "L736",
+    "chieri": "C627",
+    "pinerolo": "G674",
+    "carmagnola": "B792",
+    "ivrea": "E333",
+    "grugliasco": "E216",
+    "chivasso": "C665",
+    "orbassano": "G087",
+    "beinasco": "A734",
+    "san mauro torinese": "I030",
+    "caselle torinese": "B955",
+    "alpignano": "A217",
+    "avigliana": "A518",
+    "giaveno": "E020",
+    "cirié": "C722",
+    "leini": "E518",
+    "volpiano": "M120",
+    "rivarolo canavese": "H335",
+    "trofarello": "L444",
+    "cuorgné": "D211",
+    "piossasco": "G691",
+
+    # Provincia di Alessandria
+    "casale monferrato": "B885",
+    "novi ligure": "F965",
+    "tortona": "L304",
+    "acqui terme": "A052",
+    "valenza": "L570",
+    "ovada": "G200",
+
+    # Provincia di Asti
+    "canelli": "B594",
+    "nizza monferrato": "F902",
+
+    # Provincia di Biella
+    "cossato": "D094",
+    "candelo": "B586",
+
+    # Provincia di Cuneo
+    "alba": "A124",
+    "bra": "B111",
+    "fossano": "D742",
+    "mondovì": "F351",
+    "savigliano": "I473",
+    "saluzzo": "H701",
+    "borgo san dalmazzo": "B006",
+
+    # Provincia di Novara
+    "arona": "A429",
+    "borgomanero": "B008",
+    "galliate": "D872",
+    "trecate": "L359",
+
+    # Provincia di Verbano-Cusio-Ossola
+    "omegna": "G062",
+    "domodossola": "D332",
+    "villadossola": "M026",
+    "stresa": "I976",
+
+    # Provincia di Vercelli
+    "borgosesia": "B013",
+    "santhià": "I337",
 
     # Veneto
     "venezia": "L736",

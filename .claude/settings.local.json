@@ -43,7 +43,10 @@
       "Bash(where:*)",
       "Bash(python -m py_compile:*)",
       "Bash(npm run build:*)",
-      "Bash(.venvScriptspython.exe test_omi_integration.py)"
+      "Bash(.venvScriptspython.exe test_omi_integration.py)",
+      "Bash(..venvScriptspython.exe count_cities.py)",
+      "Bash(python backend/count_cities.py:*)",
+      "Bash(python -c:*)"
     ],
     "deny": [],
     "ask": []

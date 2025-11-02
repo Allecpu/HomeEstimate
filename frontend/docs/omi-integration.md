@@ -35,7 +35,7 @@ const prices = await getPurchasePrice({
 - `getRentalPrice()` - Prezzi di affitto
 - `getPropertyTypes()` - Lista tipi immobile
 - `getCadastralCode()` - Codice catastale comune
-- `getSupportedCities()` - Comuni supportati (108)
+- `getSupportedCities()` - Comuni supportati (242)
 - `isCitySupported()` - Verifica supporto città
 - `getOMIZones()` - Zone OMI disponibili per comune
 
@@ -317,7 +317,7 @@ Naviga a http://localhost:3000 e testa il flusso completo.
 
 ### Problema: "Città non trovata"
 
-**Causa:** Città non in lista dei 108 comuni supportati
+**Causa:** Città non in lista dei 242 comuni supportati
 
 **Soluzione:**
 - Controlla lista comuni: `GET /api/omi/cities`
