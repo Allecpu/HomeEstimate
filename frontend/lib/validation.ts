@@ -59,6 +59,7 @@ export const propertySchema = z.object({
   hasBalcony: z.boolean().optional(),
   hasCellar: z.boolean().optional(),
   hasGarden: z.boolean().optional(),
+  hasAirConditioning: z.boolean().optional(),
   parkingIncluded: z.boolean().optional(),
 
   // Enumerazioni
@@ -163,11 +164,9 @@ export function calculateDataCompleteness(data: Partial<PropertyFormData>): numb
     'rooms', 'bedrooms', 'bathrooms', 'floor', 'totalFloors', 'yearBuilt',
     'surfaceCommercial', 'surfaceUsable',
     // Dotazioni e servizi (boolean)
-    'hasElevator', 'hasParking', 'hasBalcony', 'hasCellar', 'parkingIncluded', 'hasGarden',
+    'hasElevator', 'hasParking', 'hasBalcony', 'hasCellar', 'parkingIncluded', 'hasGarden', 'hasAirConditioning',
     // Tipologia e stato
     'propertyType', 'state', 'energyClass', 'energyPerformance',
-    // Localizzazione dettagliata
-    'province', 'postalCode',
     // Informazioni aggiuntive
     'orientation', 'heating', 'heatingType', 'gardenType', 'title', 'description', 'condoFeesMonthly'
   ];

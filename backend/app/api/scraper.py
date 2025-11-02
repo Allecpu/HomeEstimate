@@ -1,12 +1,28 @@
+import asyncio
+import hashlib
+import logging
+import re
+from pathlib import Path
+from typing import Optional
+
+import httpx
+from bs4 import BeautifulSoup
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, HttpUrl
-from typing import Optional
-from bs4 import BeautifulSoup
-import re
-from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
-import asyncio
+from selenium import webdriver
+from selenium.webdriver.edge.service import Service
+from selenium.webdriver.edge.options import Options
+from selenium.common.exceptions import TimeoutException as SeleniumTimeout, WebDriverException
+from webdriver_manager.chrome import ChromeDriverManager
+
+from app.valuation.photo_condition import (
+    PhotoConditionResult,
+    PhotoConditionServiceError,
+    analyze_photo_condition,
+)
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 class ParseURLRequest(BaseModel):
     url: HttpUrl
@@ -35,36 +51,95 @@ class PropertyData(BaseModel):
     energyClass: Optional[str] = None
     yearBuilt: Optional[int] = None
     images: list[dict] = []
+    photoCondition: Optional[PhotoConditionResult] = None
     source: Optional[str] = None
 
-async def fetch_url_with_playwright(url: str) -> str:
-    """Fetch URL content using Playwright (headless browser)"""
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(
-            viewport={'width': 1920, 'height': 1080},
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            locale='it-IT',
-        )
+def fetch_url_with_selenium(url: str) -> str:
+    """Fetch URL content using Selenium (headless Edge)"""
+    # Setup Edge options
+    edge_options = Options()
+    edge_options.add_argument('--headless=new')
+    edge_options.add_argument('--no-sandbox')
+    edge_options.add_argument('--disable-dev-shm-usage')
+    edge_options.add_argument('--disable-gpu')
+    edge_options.add_argument('--window-size=1920,1080')
+    edge_options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+    edge_options.add_argument('--lang=it-IT')
+    edge_options.add_experimental_option('excludeSwitches', ['enable-logging'])
+    
+    # Initialize the driver with Chrome for Testing
+    from selenium.webdriver.edge.service import Service as EdgeService
+    from webdriver_manager.microsoft import EdgeChromiumDriverManager
+    
+    service = EdgeService(EdgeChromiumDriverManager().install())
+    driver = webdriver.Edge(service=service, options=edge_options)
+    driver.set_page_load_timeout(30)
+    
+    try:
+        # Navigate to the URL
+        driver.get(url)
+        
+        # Wait for dynamic content (implicit wait)
+        import time
+        time.sleep(2)
+        
+        # Get the HTML content
+        html = driver.page_source
+        
+        return html
+    finally:
+        driver.quit()
 
-        page = await context.new_page()
+async def download_photos_locally(photo_urls: list[str], listing_url: str) -> list[str]:
+    """
+    Download photos from URLs to local storage.
+    Returns list of local file paths.
 
-        try:
-            # Navigate to the URL and wait for network to be idle
-            await page.goto(url, wait_until='networkidle', timeout=30000)
+    Args:
+        photo_urls: List of photo URLs to download
+        listing_url: Original listing URL (used to create unique ID)
 
-            # Wait for the main content to load (specific to each site)
+    Returns:
+        List of local file paths where photos were saved
+    """
+    # Create unique ID for this listing based on URL
+    listing_id = hashlib.md5(listing_url.encode()).hexdigest()[:12]
+
+    # Create photos directory if it doesn't exist
+    photos_dir = Path("storage/photos") / listing_id
+    photos_dir.mkdir(parents=True, exist_ok=True)
+
+    local_paths = []
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        for idx, photo_url in enumerate(photo_urls):
             try:
-                await page.wait_for_selector('body', timeout=10000)
-            except PlaywrightTimeout:
-                pass
+                # Download photo
+                response = await client.get(photo_url)
+                response.raise_for_status()
 
-            # Get the HTML content
-            html = await page.content()
+                # Determine file extension from URL or content-type
+                ext = 'jpg'
+                if '.' in photo_url:
+                    url_ext = photo_url.split('.')[-1].split('?')[0].lower()
+                    if url_ext in ['jpg', 'jpeg', 'png', 'webp']:
+                        ext = url_ext
 
-            return html
-        finally:
-            await browser.close()
+                # Save to local file
+                filename = f"photo_{idx:03d}.{ext}"
+                filepath = photos_dir / filename
+
+                with open(filepath, 'wb') as f:
+                    f.write(response.content)
+
+                local_paths.append(str(filepath))
+                logger.info(f"Downloaded photo {idx + 1}/{len(photo_urls)}: {filename}")
+
+            except Exception as e:
+                logger.warning(f"Failed to download photo {photo_url}: {e}")
+                continue
+
+    return local_paths
 
 def extract_number(text: str) -> Optional[float]:
     """Extract first number from text"""
@@ -389,7 +464,7 @@ async def parse_url(request: ParseURLRequest):
 
     try:
         # Fetch HTML using Playwright
-        html = await fetch_url_with_playwright(url_str)
+        html = fetch_url_with_selenium(url_str)
         soup = BeautifulSoup(html, 'lxml')
 
         # Parse based on source
@@ -400,14 +475,45 @@ async def parse_url(request: ParseURLRequest):
         else:  # casa
             data = parse_casa(soup, url_str)
 
+        if data.images:
+            photo_urls = [
+                image.get("url")
+                for image in data.images
+                if isinstance(image, dict) and image.get("url")
+            ]
+            if photo_urls:
+                # Download photos locally
+                try:
+                    logger.info(f"Downloading {len(photo_urls)} photos for listing...")
+                    local_paths = await download_photos_locally(photo_urls[:8], url_str)  # Limit to 8 photos
+                    logger.info(f"Successfully downloaded {len(local_paths)} photos locally")
+
+                    # Analyze photos using local paths
+                    if local_paths:
+                        try:
+                            # Pass local file paths directly (will be converted to base64)
+                            analysis = await analyze_photo_condition(local_paths)
+                        except PhotoConditionServiceError as exc:
+                            logger.info("Photo condition analysis skipped: %s", exc)
+                        except Exception as exc:  # noqa: BLE001
+                            logger.warning("Unexpected error during photo analysis: %s", exc)
+                        else:
+                            if analysis:
+                                data.photoCondition = analysis
+                                if not data.state:
+                                    data.state = analysis.label
+                except Exception as e:
+                    logger.warning(f"Failed to download photos: {e}")
+
         return data
 
-    except PlaywrightTimeout:
+    except SeleniumTimeout:
         raise HTTPException(
             status_code=504,
             detail="Timeout nel caricamento della pagina. Riprova più tardi."
         )
     except Exception as e:
+        logger.exception("Error parsing URL: %s", url_str)
         raise HTTPException(
             status_code=500,
             detail=f"Errore nel parsing: {str(e)}"

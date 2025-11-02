@@ -80,6 +80,11 @@ const FIELD_MAP = [
     formatter: formatBoolean
   },
   {
+    key: 'hasAirConditioning',
+    label: 'Aria condizionata',
+    formatter: formatBoolean
+  },
+  {
     key: 'hasCellar',
     label: 'Cantina',
     formatter: formatBoolean

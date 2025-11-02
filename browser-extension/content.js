@@ -3,7 +3,7 @@
 console.log('HomeEstimate: Content script loaded');
 
 // Function to extract number from text
-function extractNumber(text) {
+function extractNumber(rawText) {
   if (!text) return null;
   // Remove whitespace and convert Italian number format
   text = text.replace(/\./g, '').replace(',', '.').trim();
@@ -27,6 +27,42 @@ function formatList(value) {
     .map(part => capitalizeWords(part.trim()))
     .filter(part => part.length > 0)
     .join(', ');
+}
+
+function hasAirConditioningKeyword(text) {
+  if (!text) return false;
+  const lowered = text.toLowerCase();
+  return (
+    lowered.includes('aria condizionata') ||
+    lowered.includes('impianto di condizionamento') ||
+    lowered.includes('condizionamento') ||
+    lowered.includes('climatizzatore') ||
+    lowered.includes('climatizzato') ||
+    lowered.includes('climatizzate') ||
+    lowered.includes('climatizzati')
+  );
+}
+
+function extractEnergyClassFromText(text) {
+  if (!text) return null;
+  const matches = Array.from(
+    text.matchAll(/classe\s+energetica[^\n]*?([A-G](?:[1-4])?|NC)/gi)
+  );
+
+  for (const match of matches) {
+    const value = match[1];
+    if (!value) continue;
+    if (value === value.toUpperCase()) {
+      return value.toUpperCase();
+    }
+  }
+
+  if (matches.length > 0) {
+    return matches[matches.length - 1][1].toUpperCase();
+  }
+
+  const fallback = text.match(/\bclasse\s+([A-G](?:[1-4])?|NC)\b/i);
+  return fallback ? fallback[1].toUpperCase() : null;
 }
 
 // Extract data from Idealista
@@ -99,6 +135,7 @@ function extractIdealista() {
   // Extract key metrics from the prominent display (price bar area)
   // This is more reliable than parsing all text
   const mainInfoText = document.body.innerText;
+  const loweredMainText = mainInfoText.toLowerCase();
 
   const pricePerSqmMatch = mainInfoText.match(/prezzo\s+al\s+m(?:\u00B2|2)[\s:]*([\d\.,]+)/i);
   if (pricePerSqmMatch) {
@@ -162,6 +199,14 @@ function extractIdealista() {
         const cleanedType = typeCandidate.replace(/riscaldamento/i, '').trim();
         data.heatingType = cleanedType ? capitalizeWords(cleanedType) : 'Riscaldamento';
       }
+    }
+  }
+
+  if (!data.hasAirConditioning) {
+    if (loweredMainText.includes('senza aria condizionata')) {
+      data.hasAirConditioning = false;
+    } else if (hasAirConditioningKeyword(mainInfoText)) {
+      data.hasAirConditioning = true;
     }
   }
 
@@ -262,20 +307,24 @@ function extractIdealista() {
           }
         }
       }
+
+      if (!data.hasAirConditioning && hasAirConditioningKeyword(segment) && !segment.toLowerCase().includes('senza aria condizionata')) {
+        data.hasAirConditioning = true;
+      }
     });
 
     // Only set if not already extracted
     if (!data.surface && (text.includes('m\u00B2') || text.includes('mq') || text.includes('m2'))) {
-      data.surface = extractNumber(text);
+      data.surface = extractNumber(rawText);
     }
     if (!data.rooms && (text.includes('locale') || text.includes('locali'))) {
-      data.rooms = Math.floor(extractNumber(text) || 0);
+      data.rooms = Math.floor(extractNumber(rawText) || 0);
     }
     if (!data.bedrooms && (text.includes('camera') || text.includes('camere'))) {
-      data.bedrooms = Math.floor(extractNumber(text) || 0);
+      data.bedrooms = Math.floor(extractNumber(rawText) || 0);
     }
     if (!data.bathrooms && (text.includes('bagno') || text.includes('bagni'))) {
-      data.bathrooms = Math.floor(extractNumber(text) || 0);
+      data.bathrooms = Math.floor(extractNumber(rawText) || 0);
     }
     if (text.includes('parcheggio') || text.includes('garage') || text.includes('box') || text.includes('posto auto')) {
       data.hasParking = true;
@@ -311,10 +360,13 @@ function extractIdealista() {
         data.heatingType = cleanedType ? capitalizeWords(cleanedType) : 'Riscaldamento';
       }
     }
+    if (!data.hasAirConditioning && hasAirConditioningKeyword(rawText) && !rawText.toLowerCase().includes('senza aria condizionata')) {
+      data.hasAirConditioning = true;
+    }
     if (!data.energyClass) {
-      const energyMatch = rawText.match(/classe\s+energetica.*?(A[1-4]|[A-G]|NC)/i);
-      if (energyMatch) {
-        data.energyClass = energyMatch[1].toUpperCase();
+      const extractedEnergyClass = extractEnergyClassFromText(rawText);
+      if (extractedEnergyClass) {
+        data.energyClass = extractedEnergyClass;
       }
     }
     if (!data.parkingIncluded && text.includes('box') && (text.includes('incluso') || text.includes('compreso'))) {
@@ -323,8 +375,6 @@ function extractIdealista() {
   });
 
   // Property state and type fallbacks from global text
-  const loweredMainText = mainInfoText.toLowerCase();
-
   if (!data.state) {
     if (loweredMainText.includes('ottimo stato') || loweredMainText.includes('ottime condizioni')) {
       data.state = 'ottimo';
@@ -352,9 +402,9 @@ function extractIdealista() {
   }
 
   if (!data.energyClass) {
-    const energyMatch = loweredMainText.match(/classe\s+energetica.*?(a[1-4]|[a-g]|nc)/i);
-    if (energyMatch) {
-      data.energyClass = energyMatch[1].toUpperCase();
+    const extractedEnergyClass = extractEnergyClassFromText(mainInfoText);
+    if (extractedEnergyClass) {
+      data.energyClass = extractedEnergyClass;
     }
   }
 
@@ -391,6 +441,7 @@ function extractImmobiliare() {
   };
 
   const mainText = document.body.innerText;
+  const loweredMainText = mainText.toLowerCase();
 
   // Title
   const titleElem = document.querySelector('h1.im-titleBlock__title, h1');
@@ -465,49 +516,58 @@ function extractImmobiliare() {
     data.postalCode = postalCodeMatch[1];
   }
 
+  if (!data.hasAirConditioning) {
+    if (loweredMainText.includes('senza aria condizionata')) {
+      data.hasAirConditioning = false;
+    } else if (hasAirConditioningKeyword(mainText)) {
+      data.hasAirConditioning = true;
+    }
+  }
+
   // Amenities
-  if (mainText.toLowerCase().includes('ascensore')) {
+  if (loweredMainText.includes('ascensore')) {
     data.hasElevator = true;
   }
-  if (mainText.toLowerCase().includes('box') || mainText.toLowerCase().includes('posto auto') || mainText.toLowerCase().includes('garage')) {
+  if (loweredMainText.includes('box') || loweredMainText.includes('posto auto') || loweredMainText.includes('garage')) {
     data.hasParking = true;
   }
-  if (mainText.toLowerCase().includes('balcone') || mainText.toLowerCase().includes('terrazzo')) {
+  if (loweredMainText.includes('balcone') || loweredMainText.includes('terrazzo')) {
     data.hasBalcony = true;
   }
-  if (mainText.toLowerCase().includes('cantina')) {
+  if (loweredMainText.includes('cantina')) {
     data.hasCellar = true;
   }
 
   // Property State
-  const stateText = mainText.toLowerCase();
-  if (stateText.includes('ottimo stato') || stateText.includes('ottime condizioni')) {
+  if (loweredMainText.includes('ottimo stato') || loweredMainText.includes('ottime condizioni')) {
     data.state = 'ottimo';
-  } else if (stateText.includes('buono stato') || stateText.includes('buone condizioni')) {
+  } else if (loweredMainText.includes('buono stato') || loweredMainText.includes('buone condizioni')) {
     data.state = 'buono';
-  } else if (stateText.includes('da ristrutturare')) {
+  } else if (loweredMainText.includes('da ristrutturare')) {
     data.state = 'da_ristrutturare';
-  } else if (stateText.includes('discreto')) {
+  } else if (loweredMainText.includes('discreto')) {
     data.state = 'discreto';
   }
 
   // Property Type
-  if (stateText.includes('signorile') || stateText.includes('prestigio')) {
+  if (loweredMainText.includes('signorile') || loweredMainText.includes('prestigio')) {
     data.propertyType = 'signorile';
-  } else if (stateText.includes('economico')) {
+  } else if (loweredMainText.includes('economico')) {
     data.propertyType = 'economico';
-  } else if (stateText.includes('ufficio')) {
+  } else if (loweredMainText.includes('ufficio')) {
     data.propertyType = 'ufficio';
-  } else if (stateText.includes('negozio') || stateText.includes('commerciale')) {
+  } else if (loweredMainText.includes('negozio') || loweredMainText.includes('commerciale')) {
     data.propertyType = 'negozio';
   } else {
     data.propertyType = 'residenziale';
   }
 
   // Energy Class
-  const energyMatch = mainText.match(/Classe\s+energetica:\s*(A[1-4]|[A-G]|NC)/i);
-  if (energyMatch) {
-    data.energyClass = energyMatch[1].toUpperCase();
+  if (!data.energyClass) {
+    const extractedEnergyClass = extractEnergyClassFromText(mainText);
+    if (extractedEnergyClass) {
+      data.energyClass = extractedEnergyClass;
+    }
   }
 
   // Address and City - improved extraction from text
@@ -579,20 +639,31 @@ function extractImmobiliare() {
 
   // Fallback: Features from structured data
   const features = document.querySelectorAll('div.im-features__item, [class*="feature"], dl dt, dl dd');
-  features.forEach((feature, index) => {
-    const text = feature.textContent.toLowerCase();
+  features.forEach((feature) => {
+    const rawText = feature.textContent ? feature.textContent.trim() : '';
+    if (!rawText) return;
+    const text = rawText.toLowerCase();
 
     if (!data.surface && (text.includes('superficie') || text.includes('m²'))) {
-      data.surface = extractNumber(text);
+      data.surface = extractNumber(rawText);
     }
     if (!data.rooms && text.includes('locali')) {
-      data.rooms = Math.floor(extractNumber(text) || 0);
+      data.rooms = Math.floor(extractNumber(rawText) || 0);
     }
     if (!data.bedrooms && text.includes('camere')) {
-      data.bedrooms = Math.floor(extractNumber(text) || 0);
+      data.bedrooms = Math.floor(extractNumber(rawText) || 0);
     }
     if (!data.bathrooms && text.includes('bagni')) {
-      data.bathrooms = Math.floor(extractNumber(text) || 0);
+      data.bathrooms = Math.floor(extractNumber(rawText) || 0);
+    }
+    if (!data.hasAirConditioning && hasAirConditioningKeyword(rawText) && !text.includes('senza aria condizionata')) {
+      data.hasAirConditioning = true;
+    }
+    if (!data.energyClass) {
+      const extractedEnergyClass = extractEnergyClassFromText(rawText);
+      if (extractedEnergyClass) {
+        data.energyClass = extractedEnergyClass;
+      }
     }
   });
 
@@ -661,3 +732,9 @@ window.addEventListener('load', () => {
     }
   }, 2000);
 });
+
+
+
+
+
+

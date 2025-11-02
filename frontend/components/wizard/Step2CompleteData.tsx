@@ -87,6 +87,23 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
     return undefined;
   };
 
+  const parseNonNegativeNumber = (value: unknown): number | undefined => {
+    const parsed = toNumber(value);
+    if (parsed === undefined || parsed < 0) {
+      return undefined;
+    }
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+
+  const parseNonNegativeInteger = (value: unknown): number | undefined => {
+    const parsed = toNumber(value);
+    if (parsed === undefined || parsed < 0) {
+      return undefined;
+    }
+    const floored = Math.floor(parsed);
+    return Number.isFinite(floored) ? floored : undefined;
+  };
+
   const processedData = useMemo(() => {
     if (!initialData) {
       return {} as Partial<PropertyFormData>;
@@ -163,14 +180,6 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
     }
 
     // New fields added
-    if (initialData.province !== undefined) {
-      result.province = initialData.province;
-    }
-
-    if (initialData.postalCode !== undefined) {
-      result.postalCode = initialData.postalCode;
-    }
-
     if (initialData.hasElevator !== undefined) {
       result.hasElevator = initialData.hasElevator;
     }
@@ -189,6 +198,10 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
 
     if (initialData.hasGarden !== undefined) {
       result.hasGarden = initialData.hasGarden;
+    }
+
+    if (initialData.hasAirConditioning !== undefined) {
+      result.hasAirConditioning = initialData.hasAirConditioning;
     }
 
     if (initialData.parkingIncluded !== undefined) {
@@ -244,6 +257,8 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
     handleSubmit,
     control,
     reset,
+    setValue,
+    getValues,
     formState: { errors },
   } = useForm<PropertyFormData>({
     resolver: zodResolver(propertySchema),
@@ -258,6 +273,20 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
 
   const lastAppliedSignatureRef = useRef<string | undefined>(undefined);
 
+  const lastAutoPricePerSqmSignatureRef = useRef<string | undefined>(undefined);
+  const pricePerSqmManuallyEditedRef = useRef(false);
+
+  const watchedPrice = useWatch({ control, name: 'price' });
+  const watchedSurface = useWatch({ control, name: 'surface' });
+
+  const pricePerSqmField = register('pricePerSqm', {
+    valueAsNumber: true,
+    onChange: (event) => {
+      const value = event?.target?.value ?? '';
+      pricePerSqmManuallyEditedRef.current = value !== '';
+    },
+  });
+
   useEffect(() => {
     if (!initialData || Object.keys(initialData).length === 0) {
       return;
@@ -270,6 +299,34 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
     lastAppliedSignatureRef.current = processedDataSignature;
     reset(processedData);
   }, [initialData, processedData, processedDataSignature, reset]);
+
+  useEffect(() => {
+    if (typeof watchedSurface !== 'number' || !Number.isFinite(watchedSurface) || watchedSurface <= 0) {
+      return;
+    }
+
+    if (typeof watchedPrice !== 'number' || !Number.isFinite(watchedPrice) || watchedPrice <= 0) {
+      return;
+    }
+
+    const signature = `${watchedPrice}-${watchedSurface}`;
+    if (signature !== lastAutoPricePerSqmSignatureRef.current) {
+      lastAutoPricePerSqmSignatureRef.current = signature;
+      pricePerSqmManuallyEditedRef.current = false;
+    }
+
+    if (pricePerSqmManuallyEditedRef.current) {
+      return;
+    }
+
+    const computed = Number((watchedPrice / watchedSurface).toFixed(2));
+    const currentValue = getValues('pricePerSqm');
+    const hasValidCurrentValue = typeof currentValue === 'number' && Number.isFinite(currentValue);
+
+    if (!hasValidCurrentValue || Math.abs((currentValue as number) - computed) > 0.009) {
+      setValue('pricePerSqm', computed, { shouldDirty: true, shouldValidate: true });
+    }
+  }, [watchedPrice, watchedSurface, getValues, setValue]);
 
   // Format number with Italian thousands separator
   const formatPrice = (value: number | string | undefined): string => {
@@ -394,9 +451,12 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
               </Label>
               <Input
                 id="surface"
-                type="number"
+                type="text"
+                inputMode="decimal"
                 placeholder="80"
-                {...register('surface', { valueAsNumber: true })}
+                {...register('surface', {
+                  setValueAs: (value) => parseNonNegativeNumber(value),
+                })}
                 className={errors.surface ? 'border-red-500' : ''}
               />
               {errors.surface && (
@@ -432,19 +492,29 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
                 type="number"
                 step="0.01"
                 placeholder="3.200"
-                {...register('pricePerSqm', { valueAsNumber: true })}
+                {...pricePerSqmField}
               />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="condoFeesMonthly">Spese condominiali (€/mese)</Label>
-              <Input
-                id="condoFeesMonthly"
-                type="number"
-                step="0.01"
-                placeholder="150"
-                {...register('condoFeesMonthly', { valueAsNumber: true })}
+              <Controller
+                name="condoFeesMonthly"
+                control={control}
+                render={({ field }) => (
+                  <Input
+                    id="condoFeesMonthly"
+                    type="text"
+                    placeholder="150"
+                    value={formatPrice(field.value)}
+                    onChange={(event) => field.onChange(parsePrice(event.target.value))}
+                    className={errors.condoFeesMonthly ? 'border-red-500' : ''}
+                  />
+                )}
               />
+              {errors.condoFeesMonthly && (
+                <p className="text-sm text-red-500">{errors.condoFeesMonthly.message}</p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -464,10 +534,12 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
               <Label htmlFor="rooms">Locali</Label>
               <Input
                 id="rooms"
-                type="number"
+                type="text"
+                inputMode="numeric"
                 placeholder="3"
-                min="0"
-                {...register('rooms', { valueAsNumber: true })}
+                {...register('rooms', {
+                  setValueAs: (value) => parseNonNegativeInteger(value),
+                })}
               />
             </div>
 
@@ -475,10 +547,12 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
               <Label htmlFor="bedrooms">Camere da letto</Label>
               <Input
                 id="bedrooms"
-                type="number"
+                type="text"
+                inputMode="numeric"
                 placeholder="2"
-                min="0"
-                {...register('bedrooms', { valueAsNumber: true })}
+                {...register('bedrooms', {
+                  setValueAs: (value) => parseNonNegativeInteger(value),
+                })}
               />
             </div>
 
@@ -486,10 +560,12 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
               <Label htmlFor="bathrooms">Bagni</Label>
               <Input
                 id="bathrooms"
-                type="number"
+                type="text"
+                inputMode="numeric"
                 placeholder="1"
-                min="0"
-                {...register('bathrooms', { valueAsNumber: true })}
+                {...register('bathrooms', {
+                  setValueAs: (value) => parseNonNegativeInteger(value),
+                })}
               />
             </div>
 
@@ -497,9 +573,9 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
               <Label htmlFor="floor">Piano</Label>
               <Input
                 id="floor"
-                type="number"
+                type="text"
                 placeholder="2"
-                min="0"
+                inputMode="numeric"
                 {...register('floor', {
                   setValueAs: (value) => parseFloorValue(value),
                 })}
@@ -514,17 +590,11 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
               <Label htmlFor="totalFloors">Piani totali edificio</Label>
               <Input
                 id="totalFloors"
-                type="number"
+                type="text"
                 placeholder="5"
-                min="0"
+                inputMode="numeric"
                 {...register('totalFloors', {
-                  setValueAs: (value) => {
-                    const parsed = toNumber(value);
-                    if (parsed === undefined || parsed < 0) {
-                      return undefined;
-                    }
-                    return Math.floor(parsed);
-                  }
+                  setValueAs: (value) => parseNonNegativeInteger(value),
                 })}
               />
             </div>
@@ -533,10 +603,12 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
               <Label htmlFor="surfaceCommercial">Superficie commerciale (m²)</Label>
               <Input
                 id="surfaceCommercial"
-                type="number"
+                type="text"
                 placeholder="64"
-                min="0"
-                {...register('surfaceCommercial', { valueAsNumber: true })}
+                inputMode="decimal"
+                {...register('surfaceCommercial', {
+                  setValueAs: (value) => parseNonNegativeNumber(value),
+                })}
               />
             </div>
 
@@ -544,10 +616,12 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
               <Label htmlFor="surfaceUsable">Superficie calpestabile (m²)</Label>
               <Input
                 id="surfaceUsable"
-                type="number"
+                type="text"
                 placeholder="62"
-                min="0"
-                {...register('surfaceUsable', { valueAsNumber: true })}
+                inputMode="decimal"
+                {...register('surfaceUsable', {
+                  setValueAs: (value) => parseNonNegativeNumber(value),
+                })}
               />
             </div>
 
@@ -555,10 +629,9 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
               <Label htmlFor="yearBuilt">Anno costruzione</Label>
               <Input
                 id="yearBuilt"
-                type="number"
+                type="text"
                 placeholder="1980"
-                min="1800"
-                max={new Date().getFullYear()}
+                inputMode="numeric"
                 {...register('yearBuilt', {
                   setValueAs: (value) => {
                     const parsed = toNumber(value);
@@ -673,6 +746,21 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
                 )}
               />
               <Label htmlFor="hasGarden" className="cursor-pointer">Giardino</Label>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Controller
+                name="hasAirConditioning"
+                control={control}
+                render={({ field }) => (
+                  <Checkbox
+                    id="hasAirConditioning"
+                    checked={field.value === true}
+                    onCheckedChange={(checked) => field.onChange(checked === true ? true : undefined)}
+                  />
+                )}
+              />
+              <Label htmlFor="hasAirConditioning" className="cursor-pointer">Aria condizionata</Label>
             </div>
           </CardContent>
         </Card>
@@ -802,47 +890,13 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
               <Label htmlFor="energyPerformance">Prestazione energetica (kWh/m² anno)</Label>
               <Input
                 id="energyPerformance"
-                type="number"
-                step="0.01"
-                placeholder="434.51"
-                {...register('energyPerformance', { valueAsNumber: true })}
+                type="text"
+                inputMode="decimal"
+                placeholder="434,51"
+                {...register('energyPerformance', {
+                  setValueAs: (value) => parseNonNegativeNumber(value),
+                })}
               />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Localizzazione Dettagliata */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Dettagli Localizzazione</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="province">Provincia</Label>
-              <Input
-                id="province"
-                placeholder="MI"
-                maxLength={2}
-                {...register('province')}
-                className={errors.province ? 'border-red-500' : ''}
-              />
-              {errors.province && (
-                <p className="text-sm text-red-500">{errors.province.message}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="postalCode">CAP</Label>
-              <Input
-                id="postalCode"
-                placeholder="20121"
-                maxLength={5}
-                {...register('postalCode')}
-                className={errors.postalCode ? 'border-red-500' : ''}
-              />
-              {errors.postalCode && (
-                <p className="text-sm text-red-500">{errors.postalCode.message}</p>
-              )}
             </div>
           </CardContent>
         </Card>
@@ -891,3 +945,6 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
     </div>
   );
 }
+
+
+

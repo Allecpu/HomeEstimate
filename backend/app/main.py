@@ -1,8 +1,12 @@
 import base64
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import router as api_router
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = FastAPI(
     title="HomeEstimate API",
