@@ -16,6 +16,7 @@ import { Progress } from '@/components/ui/progress';
 import type { PhotoConditionLabel, PhotoConditionResult } from '@/lib/photo-analysis';
 import { analyzePhotoConditionFromStorage, getSavedAnalysis } from '@/lib/photo-analysis';
 import { OMIDataFields } from '@/components/wizard/OMIDataFields';
+import { getOMISuggestions, type OMISuggestion } from '@/lib/omi-api';
 
 const PHOTO_CONDITION_LABELS: Record<PhotoConditionLabel, string> = {
   da_ristrutturare: 'Da ristrutturare',
@@ -126,6 +127,7 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [loadingSavedAnalysis, setLoadingSavedAnalysis] = useState(false);
+  const [omiSuggestions, setOmiSuggestions] = useState<OMISuggestion | null>(null);
   const attemptedSavedAnalysisId = useRef<string | null>(null);
 
   const photoStorageId = initialData?.photoStorageId;
@@ -314,6 +316,7 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
     reset,
     setValue,
     getValues,
+    watch,
     formState: { errors },
   } = useForm<PropertyFormData>({
     resolver: zodResolver(propertySchema),
@@ -432,6 +435,37 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
 
     loadSavedAnalysis();
   }, [photoStorageId, photoAnalysis, getValues, setValue]);
+
+  // Auto-suggest OMI data based on address
+  const watchedAddress = watch('address');
+  const watchedCity = watch('city');
+  const watchedDescription = watch('description');
+
+  useEffect(() => {
+    // Solo se abbiamo indirizzo e città
+    if (!watchedAddress || !watchedCity || watchedAddress.length < 5 || watchedCity.length < 2) {
+      setOmiSuggestions(null);
+      return;
+    }
+
+    const fetchSuggestions = async () => {
+      try {
+        const suggestions = await getOMISuggestions({
+          address: watchedAddress,
+          city: watchedCity,
+          property_description: watchedDescription,
+        });
+        setOmiSuggestions(suggestions);
+      } catch (error) {
+        console.error('Failed to get OMI suggestions:', error);
+        setOmiSuggestions(null);
+      }
+    };
+
+    // Debounce per evitare troppe richieste
+    const timeoutId = setTimeout(fetchSuggestions, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [watchedAddress, watchedCity, watchedDescription]);
 
   const conditionScore = photoAnalysis ? Math.round(photoAnalysis.score) : 0;
   const conditionConfidence = photoAnalysis ? Math.round(photoAnalysis.confidence * 100) : 0;
@@ -1175,6 +1209,8 @@ const onSubmit = (data: PropertyFormData) => {
                   zonaOMI={zonaOMIField.value}
                   onPropertyTypeChange={propertyTypeField.onChange}
                   onZonaOMIChange={zonaOMIField.onChange}
+                  suggestedPropertyType={omiSuggestions?.suggested_property_type}
+                  suggestedZone={omiSuggestions?.suggested_zone}
                 />
               )}
             />

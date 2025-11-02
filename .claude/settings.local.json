@@ -46,7 +46,10 @@
       "Bash(.venvScriptspython.exe test_omi_integration.py)",
       "Bash(..venvScriptspython.exe count_cities.py)",
       "Bash(python backend/count_cities.py:*)",
-      "Bash(python -c:*)"
+      "Bash(python -c:*)",
+      "Bash(cmd //c \"taskkill /F /PID 27612\")",
+      "Bash(..venvScriptspython.exe -m uvicorn:*)",
+      "Bash(cmd //c \"taskkill /F /IM python3.13.exe\")"
     ],
     "deny": [],
     "ask": []

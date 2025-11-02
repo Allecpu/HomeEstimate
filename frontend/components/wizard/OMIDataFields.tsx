@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Info, Building2, MapPin, Loader2 } from 'lucide-react';
+import { Info, Building2, MapPin, Loader2, Lightbulb } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { getPropertyTypes, getOMIZones, isCitySupported, type PropertyTypeInfo } from '@/lib/omi-api';
 
 interface OMIDataFieldsProps {
@@ -14,6 +15,8 @@ interface OMIDataFieldsProps {
   zonaOMI?: string;
   onPropertyTypeChange: (value: string) => void;
   onZonaOMIChange: (value: string) => void;
+  suggestedPropertyType?: string | null;
+  suggestedZone?: string | null;
 }
 
 /**
@@ -26,6 +29,8 @@ export function OMIDataFields({
   zonaOMI,
   onPropertyTypeChange,
   onZonaOMIChange,
+  suggestedPropertyType,
+  suggestedZone,
 }: OMIDataFieldsProps) {
   const [propertyTypes, setPropertyTypes] = useState<PropertyTypeInfo[]>([]);
   const [zones, setZones] = useState<string[]>([]);
@@ -156,6 +161,42 @@ export function OMIDataFields({
             </Alert>
           )}
 
+          {/* Suggerimenti automatici */}
+          {(suggestedPropertyType || suggestedZone) && (
+            <Alert className="bg-blue-50 border-blue-200">
+              <Lightbulb className="h-4 w-4 text-blue-600" />
+              <AlertDescription>
+                <div className="flex flex-col gap-2">
+                  <p className="font-medium text-blue-900">Suggerimenti in base all&apos;indirizzo:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {suggestedPropertyType && !propertyTypeOMI && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="text-xs"
+                        onClick={() => onPropertyTypeChange(suggestedPropertyType)}
+                      >
+                        Applica tipo: {propertyTypes.find(t => t.value === suggestedPropertyType)?.display_name || suggestedPropertyType}
+                      </Button>
+                    )}
+                    {suggestedZone && !zonaOMI && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="text-xs"
+                        onClick={() => onZonaOMIChange(suggestedZone)}
+                      >
+                        Applica zona: {suggestedZone}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Tipo di immobile OMI */}
           <div className="space-y-2">
             <Label htmlFor="propertyTypeOMI" className="flex items-center gap-2">
@@ -178,7 +219,7 @@ export function OMIDataFields({
                   </div>
                 ) : (
                   <>
-                    <SelectItem value="">Nessuno</SelectItem>
+                    <SelectItem value="none">Nessuno</SelectItem>
                     {propertyTypes.map((type) => (
                       <SelectItem key={type.value} value={type.value}>
                         {type.display_name}
@@ -211,7 +252,7 @@ export function OMIDataFields({
                   <SelectValue placeholder="Seleziona zona OMI" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Tutte le zone</SelectItem>
+                  <SelectItem value="all">Tutte le zone</SelectItem>
                   {zones.map((zone) => (
                     <SelectItem key={zone} value={zone}>
                       Zona {zone}

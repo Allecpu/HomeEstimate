@@ -69,7 +69,6 @@ CADASTRAL_CODES: Dict[str, str] = {
     "trescore balneario": "L386",
 
     # Provincia di Brescia
-    "desenzano del garda": "D284",
     "montichiari": "F471",
     "lumezzane": "E738",
     "chiari": "C618",
@@ -80,14 +79,67 @@ CADASTRAL_CODES: Dict[str, str] = {
     "orzinuovi": "G149",
     "rovato": "H598",
 
+    # Lago di Garda - Provincia di Brescia
+    "desenzano del garda": "D284",
+    "sirmione": "I633",
+    "lonato del garda": "E666",
+    "padenghe sul garda": "G213",
+    "moniga del garda": "F373",
+    "manerba del garda": "E883",
+    "san felice del benaco": "H838",
+    "salò": "H717",
+    "gardone riviera": "D917",
+    "toscolano-maderno": "L305",
+    "gargnano": "D924",
+    "tignale": "L169",
+    "tremosine sul garda": "L371",
+    "limone sul garda": "E596",
+
+    # Lago di Garda - Provincia di Verona
+    "peschiera del garda": "G489",
+    "castelnuovo del garda": "C223",
+    "lazise": "E502",
+    "bardolino": "A650",
+    "garda": "D915",
+    "torri del benaco": "L287",
+    "brenzone sul garda": "B154",
+    "malcesine": "E848",
+
     # Provincia di Como
     "erba": "D416",
     "cantù": "B639",
     "mariano comense": "E951",
     "olgiate comasco": "G030",
     "lomazzo": "E661",
-    "menaggio": "F120",
     "cernobbio": "C520",
+
+    # Lago di Como - Provincia di Como
+    "laglio": "E405",
+    "brienno": "B171",
+    "argegno": "A392",
+    "colonno": "C900",
+    "sala comacina": "H682",
+    "ossuccio": "G179",
+    "lenno": "E527",
+    "tremezzo": "L372",
+    "griante": "E172",
+    "menaggio": "F125",
+    "bellagio": "A744",
+    "varenna": "L680",
+
+    # Lago di Como - Provincia di Lecco
+    "mandello del lario": "E879",
+    "abbadia lariana": "A005",
+    "lierna": "E581",
+    "bellano": "A745",
+    "dervio": "D281",
+    "colico": "C839",
+
+    # Lago di Lugano - Provincia di Como
+    "campione d'italia": "B516",
+    "lanzo d'intelvi": "E443",
+    "porlezza": "G889",
+    "valsolda": "L650",
 
     # Provincia di Varese
     "busto arsizio": "B300",
@@ -99,6 +151,14 @@ CADASTRAL_CODES: Dict[str, str] = {
     "somma lombardo": "I819",
     "malnate": "E863",
     "cassano magnago": "C004",
+
+    # Lago di Varese - Provincia di Varese
+    "gavirate": "D946",
+    "azzate": "A525",
+    "bodio lomnago": "A918",
+    "bregano": "B133",
+    "biandronno": "A842",
+    "cazzago brabbia": "C408",
 
     # Provincia di Pavia
     "vigevano": "L872",
@@ -216,6 +276,34 @@ CADASTRAL_CODES: Dict[str, str] = {
     "domodossola": "D332",
     "villadossola": "M026",
     "stresa": "I976",
+
+    # Lago Maggiore - Piemonte (Verbano-Cusio-Ossola e Novara)
+    "baveno": "A725",
+    "cannobio": "B615",
+    "ghiffa": "E003",
+    "oggebbio": "G008",
+    "cannero riviera": "B609",
+    "mergozzo": "F146",
+    "lesa": "E549",
+    "meina": "F093",
+    "belgirate": "A741",
+    "dormelletto": "D347",
+
+    # Lago Maggiore - Lombardia (Varese)
+    "angera": "A290",
+    "sesto calende": "I688",
+    "castelletto sopra ticino": "C145",
+    "ispra": "E367",
+    "ranco": "H173",
+    "leggiuno": "E509",
+    "monvalle": "F704",
+    "laveno-mombello": "E496",
+    "maccagno con pino e veddasca": "E782",
+
+    # Lago di Orta (Novara)
+    "orta san giulio": "G134",
+    "pettenasco": "G520",
+    "pella": "G422",
 
     # Provincia di Vercelli
     "borgosesia": "B013",

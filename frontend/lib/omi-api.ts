@@ -237,3 +237,57 @@ export async function getOMIZones(city: string): Promise<string[]> {
     return [];
   }
 }
+
+export interface OMISuggestion {
+  suggested_property_type: string | null;
+  suggested_zone: string | null;
+  confidence: 'low' | 'medium' | 'high';
+}
+
+/**
+ * Ottiene suggerimenti automatici per tipo immobile e zona OMI in base all'indirizzo
+ */
+export async function getOMISuggestions(params: {
+  address: string;
+  city: string;
+  property_description?: string;
+}): Promise<OMISuggestion> {
+  const searchParams = new URLSearchParams({
+    address: params.address,
+    city: params.city,
+  });
+
+  if (params.property_description) {
+    searchParams.append('property_description', params.property_description);
+  }
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/omi/suggest?${searchParams}`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (!response.ok) {
+      console.warn('Impossibile ottenere suggerimenti OMI');
+      return {
+        suggested_property_type: null,
+        suggested_zone: null,
+        confidence: 'low',
+      };
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error('Errore nel recupero suggerimenti OMI:', error);
+    return {
+      suggested_property_type: null,
+      suggested_zone: null,
+      confidence: 'low',
+    };
+  }
+}

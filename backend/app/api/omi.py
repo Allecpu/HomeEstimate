@@ -264,6 +264,35 @@ async def get_supported_cities():
     ]
 
 
+@router.get("/suggest")
+async def suggest_omi_data(
+    address: str = Query(..., description="Indirizzo completo dell'immobile"),
+    city: str = Query(..., description="Nome del comune"),
+    property_description: Optional[str] = Query(None, description="Descrizione dell'immobile")
+):
+    """
+    Suggerisce automaticamente tipo immobile e zona OMI in base all'indirizzo.
+
+    Args:
+        address: Indirizzo completo dell'immobile
+        city: Nome del comune
+        property_description: Descrizione opzionale dell'immobile
+
+    Returns:
+        Dizionario con suggested_property_type e suggested_zone
+    """
+    from app.omi.suggester import suggest_property_type, suggest_omi_zone
+
+    suggested_type = suggest_property_type(address, property_description)
+    suggested_zone = await suggest_omi_zone(city, address)
+
+    return {
+        "suggested_property_type": suggested_type,
+        "suggested_zone": suggested_zone,
+        "confidence": "medium"  # Può essere "low", "medium", "high"
+    }
+
+
 @router.get("/health")
 async def health():
     """Health check per il servizio OMI."""

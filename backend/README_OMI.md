@@ -6,7 +6,7 @@ HomeEstimate integra le **API OMI** (Osservatorio del Mercato Immobiliare) dell'
 
 ### Caratteristiche Principali
 
-- ✅ **242 comuni supportati** (Lombardia e Piemonte completamente coperti)
+- ✅ **312 comuni supportati** (Lombardia, Piemonte e tutti i laghi del nord Italia)
 - ✅ **17 tipi di immobile** (residenziale, commerciale, industriale)
 - ✅ **Dati ufficiali** dall'Agenzia delle Entrate
 - ✅ **Cache automatica** (1 ora TTL)
@@ -30,7 +30,7 @@ python test_omi_integration.py
 
 Output atteso:
 ```
-✓ Test codici catastali: 242 comuni supportati
+✓ Test codici catastali: 312 comuni supportati
 ✓ Test tipi immobile: 17 tipi disponibili
 ✓ Test query OMI: Dati ricevuti
 ✓ Test cache: Funzionante
@@ -127,24 +127,35 @@ GET /api/omi/cities
 GET /api/omi/zones?city=Milano
 ```
 
-## Comuni Supportati (242)
+## Comuni Supportati (312)
 
 ### Copertura Completa
-- **Lombardia**: ~90 comuni
+- **Lombardia**: ~140 comuni
   - Province: Milano, Bergamo, Brescia, Como, Varese, Pavia, Cremona, Mantova, Lecco, Lodi, Sondrio, Monza-Brianza
-- **Piemonte**: ~45 comuni
+  - Include tutti i comuni del Lago di Como, Garda (sponda lombarda), Maggiore (sponda lombarda), Varese, Lugano
+- **Piemonte**: ~65 comuni
   - Province: Torino, Alessandria, Asti, Biella, Cuneo, Novara, Verbania, Vercelli
+  - Include tutti i comuni del Lago Maggiore (sponda piemontese) e Lago di Orta
+
+### Laghi del Nord Italia (70 comuni)
+- **Lago Maggiore**: 23 comuni (Baveno, Stresa, Cannobio, Lesa, Arona, Luino, ecc.)
+- **Lago di Como**: 18 comuni (Bellagio, Varenna, Menaggio, Tremezzo, Lenno, ecc.)
+- **Lago di Garda**: 22 comuni (Sirmione, Desenzano, Salò, Bardolino, Malcesine, ecc.)
+- **Lago di Orta**: 3 comuni (Orta San Giulio, Pettenasco, Pella)
+- **Lago di Lugano**: 4 comuni (Campione d'Italia, Porlezza, ecc.)
+- **Lago di Varese**: 6 comuni (Gavirate, Azzate, ecc.)
 
 ### Altre Regioni
 - Tutti i capoluoghi di regione (20)
 - Tutti i capoluoghi di provincia (107)
 - Principali città delle altre regioni
 
-### Esempi Lombardia
-Milano, Bergamo, Brescia, Monza, Como, Varese, Rho, Sesto San Giovanni, Desio, Seregno, Busto Arsizio, Gallarate, Vigevano, Treviglio, Desenzano del Garda...
+### Esempi Località Premium
+**Lombardia**: Milano, Bergamo, Brescia, Bellagio, Sirmione, Desenzano del Garda, Como, Menaggio, Varenna, Monza, Rho, Busto Arsizio...
 
-### Esempi Piemonte
-Torino, Alessandria, Asti, Cuneo, Novara, Moncalieri, Rivoli, Collegno, Settimo Torinese, Ivrea, Alba, Bra, Fossano...
+**Piemonte**: Torino, Moncalieri, Rivoli, Stresa, Baveno, Orta San Giulio, Alba, Ivrea, Collegno...
+
+**Località Lacustri**: Bellagio, Sirmione, Varenna, Stresa, Orta San Giulio, Salò, Bardolino, Limone sul Garda, Malcesine, Lesa...
 
 ## Tipi Immobile (17)
 
@@ -218,20 +229,21 @@ cheapest = min(response.quotations,
 print(f"Zona più economica: {cheapest.zona_omi}")
 ```
 
-### 2. Analisi Multi-Città
+### 2. Analisi Multi-Città Lacustri
 ```python
-cities = ["Milano", "Roma", "Torino", "Bologna"]
+lake_cities = ["Bellagio", "Sirmione", "Stresa", "Varenna"]
 results = {}
 
-for city in cities:
+for city in lake_cities:
     resp = await client.query(city, metri_quadri=100)
-    avg_price = sum(q.prezzo_acquisto_medio or 0
-                   for q in resp.quotations) / len(resp.quotations)
-    results[city] = avg_price
+    if resp and resp.quotations:
+        avg_price = sum(q.prezzo_acquisto_medio or 0
+                       for q in resp.quotations) / len(resp.quotations)
+        results[city] = avg_price
 
-# Città più cara
+# Località lacustre più cara
 most_expensive = max(results.items(), key=lambda x: x[1])
-print(f"{most_expensive[0]}: €{most_expensive[1]:,.2f}")
+print(f"{most_expensive[0]}: €{most_expensive[1]:,.2f}/100mq")
 ```
 
 ### 3. Filtro per Stato Conservazione
@@ -278,7 +290,7 @@ Vedi [frontend/docs/omi-integration.md](../frontend/docs/omi-integration.md) per
 
 ## Limitazioni
 
-1. **Comuni**: 242 su ~7900 totali italiani (3%)
+1. **Comuni**: 312 su ~7900 totali italiani (~4%)
 2. **Aggiornamento**: Semestrale (non real-time)
 3. **Zone**: Alcune città piccole hanno poche zone
 4. **Prezzi**: Range, non prezzo esatto
@@ -312,6 +324,7 @@ Per problemi o domande:
 
 ---
 
-**Versione**: 2.0 (242 comuni)
+**Versione**: 3.0 (312 comuni - Include tutti i laghi del nord Italia)
 **Ultimo aggiornamento**: 2025-11-02
 **Sviluppato con**: FastAPI, Pydantic, httpx, Next.js, TypeScript
+**Espansione laghi**: Maggiore, Como, Garda, Orta, Varese, Lugano (70 comuni)
