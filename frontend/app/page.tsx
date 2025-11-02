@@ -7,9 +7,19 @@ import { Step1UrlInput } from '@/components/wizard/Step1UrlInput';
 import { Step2CompleteData } from '@/components/wizard/Step2CompleteData';
 import { Step3VerifyLocation } from '@/components/wizard/Step3VerifyLocation';
 import { Step4Calculation } from '@/components/wizard/Step4Calculation';
+import { Step5Report } from '@/components/wizard/Step5Report';
 import { PropertyFormData } from '@/lib/validation';
 
-type WizardData = Partial<PropertyFormData> & { lat?: number; lng?: number; url?: string };
+type WizardData = Partial<PropertyFormData> & {
+  lat?: number;
+  lng?: number;
+  url?: string;
+  estimatedValue?: number;
+  pricePerSqm?: number;
+  confidence?: number;
+  comparables?: number;
+  marketTrend?: string;
+};
 
 const WIZARD_STEPS = [
   {
@@ -138,9 +148,23 @@ function HomeContent() {
             />
           )}
 
-          {currentStep === 5 && (
+          {currentStep === 5 && wizardData.estimatedValue && (
+            <Step5Report
+              onBack={handleBack}
+              propertyData={wizardData as PropertyFormData & { lat?: number; lng?: number }}
+              estimationData={{
+                estimatedValue: wizardData.estimatedValue,
+                pricePerSqm: wizardData.pricePerSqm || 0,
+                confidence: wizardData.confidence || 0,
+                comparables: wizardData.comparables || 0,
+                marketTrend: wizardData.marketTrend || 'stabile',
+              }}
+            />
+          )}
+
+          {currentStep === 5 && !wizardData.estimatedValue && (
             <div className="text-center py-12">
-              <p className="text-gray-600">Step 5: Report (in sviluppo)</p>
+              <p className="text-gray-600">Nessun dato di stima disponibile. Torna indietro e completa il calcolo.</p>
             </div>
           )}
         </div>
