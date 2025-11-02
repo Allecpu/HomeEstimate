@@ -16,7 +16,8 @@ import { Progress } from '@/components/ui/progress';
 import type { PhotoConditionLabel, PhotoConditionResult } from '@/lib/photo-analysis';
 import { analyzePhotoConditionFromStorage, getSavedAnalysis } from '@/lib/photo-analysis';
 import { OMIDataFields } from '@/components/wizard/OMIDataFields';
-import { getOMISuggestions, type OMISuggestion } from '@/lib/omi-api';
+import { getOMISuggestions, type OMISuggestion, type OMIQuerySnapshotPayload } from '@/lib/omi-api';
+import { getLatestOMISnapshotByCity, OMI_SNAPSHOT_ZONE_KEY } from '@/lib/db';
 
 const PHOTO_CONDITION_LABELS: Record<PhotoConditionLabel, string> = {
   da_ristrutturare: 'Da ristrutturare',
@@ -580,6 +581,47 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
       return;
     }
 
+    let active = true;
+
+    const loadCachedSuggestions = async () => {
+      try {
+        const cached = await getLatestOMISnapshotByCity<OMIQuerySnapshotPayload>(
+          watchedCity,
+          (row) => row.zona !== OMI_SNAPSHOT_ZONE_KEY
+        );
+
+        if (!active || !cached || cached.payload.payload.kind !== 'query') {
+          return;
+        }
+
+        const params = cached.payload.payload.params;
+        const suggestedPropertyType = params?.tipo_immobile ?? null;
+        const suggestedZone = params?.zona_omi ?? null;
+
+        if (!suggestedPropertyType && !suggestedZone) {
+          return;
+        }
+
+        const cachedSuggestion: OMISuggestion = {
+          suggested_property_type: suggestedPropertyType,
+          suggested_zone: suggestedZone,
+          confidence: 'low',
+        };
+
+        setOmiSuggestions((current) => {
+          const hasActualData = Boolean(
+            current?.suggested_property_type || current?.suggested_zone
+          );
+
+          return hasActualData ? current : cachedSuggestion;
+        });
+      } catch (error) {
+        console.warn('Unable to hydrate OMI suggestions from cache:', error);
+      }
+    };
+
+    void loadCachedSuggestions();
+
     const fetchSuggestions = async () => {
       try {
         const suggestions = await getOMISuggestions({
@@ -596,7 +638,10 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
 
     // Debounce per evitare troppe richieste
     const timeoutId = setTimeout(fetchSuggestions, 1000);
-    return () => clearTimeout(timeoutId);
+    return () => {
+      active = false;
+      clearTimeout(timeoutId);
+    };
   }, [watchedAddress, watchedCity, watchedDescription]);
 
   const conditionScore = photoAnalysis ? Math.round(photoAnalysis.score) : 0;

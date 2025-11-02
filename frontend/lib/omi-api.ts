@@ -2,7 +2,111 @@
  * Client per le API OMI (Osservatorio del Mercato Immobiliare)
  */
 
+import {
+  getLatestOMISnapshotByCity,
+  getOMISnapshot,
+  saveOMISnapshot,
+  OMI_SNAPSHOT_DEFAULT_TTL_MS,
+  OMI_SNAPSHOT_WILDCARD,
+  OMI_SNAPSHOT_ZONE_KEY,
+  type OMISnapshotRow,
+} from '@/lib/db';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+export type OMIQuerySnapshotPayload = {
+  kind: 'query';
+  response: OMIResponse;
+  params: {
+    city: string;
+    zona_omi?: string | null;
+    tipo_immobile?: string | null;
+    operazione?: 'acquisto' | 'affitto';
+    metri_quadri?: number;
+  };
+};
+
+export type OMIZoneListSnapshotPayload = {
+  kind: 'zone-list';
+  city: string;
+  zones: string[];
+  source?: 'query' | 'manual';
+};
+
+function buildQuerySnapshotKey(params: {
+  city: string;
+  zona_omi?: string;
+  tipo_immobile?: string;
+}): {
+  comune: string;
+  zona: string;
+  destinazione: string;
+} {
+  return {
+    comune: params.city,
+    zona: params.zona_omi ?? OMI_SNAPSHOT_WILDCARD,
+    destinazione: params.tipo_immobile ?? OMI_SNAPSHOT_WILDCARD,
+  };
+}
+
+function extractZonesFromResponse(response: OMIResponse): string[] {
+  const zones = new Set<string>();
+  response.quotations.forEach((quotation) => {
+    if (quotation.zona_omi) {
+      zones.add(quotation.zona_omi);
+    }
+  });
+  return Array.from(zones).sort();
+}
+
+async function persistZoneSnapshot(city: string, zones: string[], options?: { ttlMs?: number; semestre?: string }) {
+  if (!zones.length) {
+    return;
+  }
+
+  await saveOMISnapshot<OMIZoneListSnapshotPayload>({
+    key: {
+      comune: city,
+      zona: OMI_SNAPSHOT_ZONE_KEY,
+      destinazione: OMI_SNAPSHOT_ZONE_KEY,
+    },
+    payload: {
+      kind: 'zone-list',
+      city,
+      zones,
+      source: 'query',
+    },
+    ttlMs: options?.ttlMs ?? OMI_SNAPSHOT_DEFAULT_TTL_MS,
+    semestre: options?.semestre,
+  });
+}
+
+async function getCachedZonesFromCity(city: string): Promise<string[] | null> {
+  const directSnapshot = await getOMISnapshot<OMIZoneListSnapshotPayload>({
+    comune: city,
+    zona: OMI_SNAPSHOT_ZONE_KEY,
+    destinazione: OMI_SNAPSHOT_ZONE_KEY,
+  });
+
+  if (directSnapshot?.payload.payload.kind === 'zone-list') {
+    return directSnapshot.payload.payload.zones;
+  }
+
+  const latestQuery = await getLatestOMISnapshotByCity<OMIQuerySnapshotPayload>(city, (row: OMISnapshotRow) =>
+    row.zona !== OMI_SNAPSHOT_ZONE_KEY
+  );
+
+  if (latestQuery?.payload.payload.kind === 'query') {
+    const zones = extractZonesFromResponse(latestQuery.payload.payload.response);
+    const ttl = Math.max(latestQuery.row.expiresAt - Date.now(), 0);
+    if (zones.length && ttl > 0) {
+      await persistZoneSnapshot(city, zones, { ttlMs: ttl, semestre: latestQuery.row.semestre });
+    }
+    return zones.length ? zones : null;
+  }
+
+  return null;
+}
 
 export interface OMIQuotation {
   zona_omi: string;
@@ -55,6 +159,17 @@ export async function queryOMI(params: {
   zona_omi?: string;
   tipo_immobile?: string;
 }): Promise<OMIResponse> {
+  const key = buildQuerySnapshotKey(params);
+  const cachedSnapshot = await getOMISnapshot<OMIQuerySnapshotPayload>({
+    comune: key.comune,
+    zona: key.zona,
+    destinazione: key.destinazione,
+  });
+
+  if (cachedSnapshot?.payload.payload.kind === 'query') {
+    return cachedSnapshot.payload.payload.response;
+  }
+
   const response = await fetch(`${API_BASE_URL}/api/omi/query`, {
     method: 'POST',
     headers: {
@@ -68,7 +183,31 @@ export async function queryOMI(params: {
     throw new Error(error.detail || 'Errore nel recupero dati OMI');
   }
 
-  return response.json();
+  const data: OMIResponse = await response.json();
+
+  await saveOMISnapshot<OMIQuerySnapshotPayload>({
+    key,
+    payload: {
+      kind: 'query',
+      response: data,
+      params: {
+        city: params.city,
+        zona_omi: params.zona_omi ?? null,
+        tipo_immobile: params.tipo_immobile ?? null,
+        operazione: params.operazione,
+        metri_quadri: params.metri_quadri,
+      },
+    },
+    ttlMs: OMI_SNAPSHOT_DEFAULT_TTL_MS,
+    semestre: data.timestamp,
+  });
+
+  await persistZoneSnapshot(params.city, extractZonesFromResponse(data), {
+    ttlMs: OMI_SNAPSHOT_DEFAULT_TTL_MS,
+    semestre: data.timestamp,
+  });
+
+  return data;
 }
 
 /**
@@ -223,18 +362,48 @@ export async function isCitySupported(city: string): Promise<boolean> {
  * Ottiene le zone OMI disponibili per un comune
  */
 export async function getOMIZones(city: string): Promise<string[]> {
+  const normalizedCity = city?.trim();
+  if (!normalizedCity) {
+    return [];
+  }
+
   try {
+    const cached = await getCachedZonesFromCity(normalizedCity);
+    if (cached && cached.length > 0) {
+      return cached;
+    }
+
     const response = await queryOMI({
-      city,
+      city: normalizedCity,
       metri_quadri: 1,
     });
 
-    // Estrai le zone uniche dalle quotazioni
-    const zones = new Set<string>();
-    response.quotations.forEach((q) => zones.add(q.zona_omi));
-    return Array.from(zones).sort();
-  } catch {
+    const zones = extractZonesFromResponse(response);
+    if (zones.length) {
+      await persistZoneSnapshot(normalizedCity, zones, {
+        ttlMs: OMI_SNAPSHOT_DEFAULT_TTL_MS,
+        semestre: response.timestamp,
+      });
+    }
+
+    return zones;
+  } catch (error) {
+    console.error('Failed to load OMI zones:', error);
     return [];
+  }
+}
+
+export async function getCachedOMIZones(city: string): Promise<string[] | null> {
+  const normalizedCity = city?.trim();
+  if (!normalizedCity) {
+    return null;
+  }
+
+  try {
+    return await getCachedZonesFromCity(normalizedCity);
+  } catch (error) {
+    console.warn('Unable to read cached OMI zones:', error);
+    return null;
   }
 }
 
