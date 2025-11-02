@@ -45,3 +45,27 @@ export async function analyzePhotoConditionFromStorage(
   const data = await response.json();
   return data as PhotoConditionResult;
 }
+
+export async function getSavedAnalysis(
+  listingId: string
+): Promise<PhotoConditionResult | null> {
+  try {
+    const response = await fetch(`http://localhost:8000/api/analysis/get-analysis/${encodeURIComponent(listingId)}`);
+
+    if (response.status === 404) {
+      // No saved analysis found - this is expected
+      return null;
+    }
+
+    if (!response.ok) {
+      console.warn('Failed to retrieve saved analysis:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    return data as PhotoConditionResult;
+  } catch (error) {
+    console.error('Error retrieving saved analysis:', error);
+    return null;
+  }
+}

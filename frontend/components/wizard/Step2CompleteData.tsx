@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { propertySchema, type PropertyFormData, getMissingFields, calculateDataCompleteness } from '@/lib/validation';
 import { Progress } from '@/components/ui/progress';
 import type { PhotoConditionLabel, PhotoConditionResult } from '@/lib/photo-analysis';
-import { analyzePhotoConditionFromStorage } from '@/lib/photo-analysis';
+import { analyzePhotoConditionFromStorage, getSavedAnalysis } from '@/lib/photo-analysis';
 
 const PHOTO_CONDITION_LABELS: Record<PhotoConditionLabel, string> = {
   da_ristrutturare: 'Da ristrutturare',
@@ -124,15 +124,7 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
   const [photoAnalysis, setPhotoAnalysis] = useState<PhotoConditionResult | undefined>(initialData?.photoCondition);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setPhotoAnalysis(initialData?.photoCondition);
-    setAnalysisError(null);
-  }, [initialData?.photoCondition]);
-
-  const conditionScore = photoAnalysis ? Math.round(photoAnalysis.score) : 0;
-  const conditionConfidence = photoAnalysis ? Math.round(photoAnalysis.confidence * 100) : 0;
-  const photoHighlights = photoAnalysis?.per_photo?.slice(0, 3) ?? [];
+  const [loadingSavedAnalysis, setLoadingSavedAnalysis] = useState(false);
 
   const photoStorageId = initialData?.photoStorageId;
   const photoStorageCount = initialData?.photoStorageCount ?? 0;
@@ -388,6 +380,48 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
       setValue('pricePerSqm', computed, { shouldDirty: true, shouldValidate: true });
     }
   }, [watchedPrice, watchedSurface, getValues, setValue]);
+
+  // Sync photo analysis state with initialData
+  useEffect(() => {
+    setPhotoAnalysis(initialData?.photoCondition);
+    setAnalysisError(null);
+  }, [initialData?.photoCondition]);
+
+  // Auto-load saved analysis when photoStorageId is available
+  useEffect(() => {
+    const loadSavedAnalysis = async () => {
+      // Don't load if we already have an analysis or no storage ID
+      if (photoAnalysis || !photoStorageId || loadingSavedAnalysis) {
+        return;
+      }
+
+      setLoadingSavedAnalysis(true);
+      try {
+        const savedResult = await getSavedAnalysis(photoStorageId);
+        if (savedResult) {
+          console.log('Loaded saved analysis for listing:', photoStorageId);
+          setPhotoAnalysis(savedResult);
+
+          // Auto-populate state field if empty
+          const currentState = getValues('state');
+          if (!currentState) {
+            setValue('state', savedResult.label);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load saved analysis:', error);
+        // Don't show error to user - this is an optional enhancement
+      } finally {
+        setLoadingSavedAnalysis(false);
+      }
+    };
+
+    loadSavedAnalysis();
+  }, [photoStorageId, photoAnalysis, loadingSavedAnalysis, getValues, setValue]);
+
+  const conditionScore = photoAnalysis ? Math.round(photoAnalysis.score) : 0;
+  const conditionConfidence = photoAnalysis ? Math.round(photoAnalysis.confidence * 100) : 0;
+  const photoHighlights = photoAnalysis?.per_photo?.slice(0, 3) ?? [];
 
   // Format number with Italian thousands separator
   const formatPrice = (value: number | string | undefined): string => {
@@ -840,7 +874,7 @@ const onSubmit = (data: PropertyFormData) => {
               Analisi delle Foto
             </CardTitle>
             <CardDescription>
-              Gestisci il download delle foto e avvia l'analisi visiva direttamente dal portale.
+              Gestisci il download delle foto e avvia l&apos;analisi visiva direttamente dal portale.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -881,8 +915,19 @@ const onSubmit = (data: PropertyFormData) => {
               </div>
             )}
 
+            {loadingSavedAnalysis && (
+              <div className="flex items-center gap-2 text-sm text-blue-600">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Caricamento analisi salvata...</span>
+              </div>
+            )}
+
             {photoAnalysis ? (
               <>
+                <div className="flex items-center gap-2 text-sm text-green-600 mb-2">
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>Analisi completata e salvata</span>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <p className="text-sm text-gray-500">Condizione stimata</p>
@@ -932,7 +977,7 @@ const onSubmit = (data: PropertyFormData) => {
               </>
             ) : (
               <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
-                Usa il pulsante dell'estensione per scaricare le foto e poi avvia qui l'analisi AI per ottenere una valutazione automatica dello stato dell'immobile.
+                Usa il pulsante dell&apos;estensione per scaricare le foto e poi avvia qui l&apos;analisi AI per ottenere una valutazione automatica dello stato dell&apos;immobile.
               </div>
             )}
           </CardContent>

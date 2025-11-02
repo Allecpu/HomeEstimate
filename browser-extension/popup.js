@@ -1,8 +1,17 @@
 // Popup script for HomeEstimate browser extension
 
+console.log('HomeEstimate Popup: Script loaded');
+console.log('User Agent:', navigator.userAgent);
+console.log('Browser API available:', typeof chrome !== 'undefined' ? 'chrome' : (typeof browser !== 'undefined' ? 'browser' : 'none'));
+
+// Chrome/Edge compatibility
+const browserAPI = typeof chrome !== 'undefined' ? chrome : (typeof browser !== 'undefined' ? browser : null);
+console.log('Using browser API:', browserAPI ? 'Yes' : 'No');
+
 let extractedData = null;
 
-// DOM elements
+// DOM elements - Wait for DOM to be ready
+console.log('HomeEstimate Popup: Getting DOM elements...');
 const loadingEl = document.getElementById('loading');
 const successEl = document.getElementById('success');
 const errorEl = document.getElementById('error');
@@ -12,6 +21,31 @@ const analyzePhotosBtn = document.getElementById('analyzePhotosBtn');
 const sendBtn = document.getElementById('sendBtn');
 const copyBtn = document.getElementById('copyBtn');
 const errorMessageEl = document.getElementById('errorMessage');
+
+// Debug: verify all elements are found
+console.log('HomeEstimate Popup: Elements check', {
+  loadingEl: !!loadingEl,
+  successEl: !!successEl,
+  errorEl: !!errorEl,
+  dataPreviewEl: !!dataPreviewEl,
+  extractBtn: !!extractBtn,
+  analyzePhotosBtn: !!analyzePhotosBtn,
+  sendBtn: !!sendBtn,
+  copyBtn: !!copyBtn,
+  errorMessageEl: !!errorMessageEl
+});
+
+if (extractBtn) {
+  console.log('Extract button found:', extractBtn);
+  console.log('Extract button properties:', {
+    id: extractBtn.id,
+    className: extractBtn.className,
+    disabled: extractBtn.disabled,
+    style: extractBtn.style.cssText
+  });
+} else {
+  console.error('Extract button NOT FOUND!');
+}
 
 function deriveListingId(url) {
   if (!url) return undefined;
@@ -261,7 +295,7 @@ async function extractData() {
 
   try {
     // Get current active tab
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const [tab] = await browserAPI.tabs.query({ active: true, currentWindow: true });
 
     if (!tab || !tab.id) {
       throw new Error('Nessuna tab attiva trovata');
@@ -277,7 +311,7 @@ async function extractData() {
     let response;
 
     try {
-      response = await chrome.tabs.sendMessage(tab.id, { action: 'extractData' });
+      response = await browserAPI.tabs.sendMessage(tab.id, { action: 'extractData' });
     } catch (messageError) {
       if (
         messageError &&
@@ -286,7 +320,7 @@ async function extractData() {
       ) {
         // Content script not loaded yet, inject it and retry once
         await ensureContentScript(tab.id);
-        response = await chrome.tabs.sendMessage(tab.id, { action: 'extractData' });
+        response = await browserAPI.tabs.sendMessage(tab.id, { action: 'extractData' });
       } else {
         throw messageError;
       }
@@ -319,7 +353,7 @@ async function sendToHomeEstimate() {
     const homeEstimateUrl = `http://localhost:3000?extensionData=${dataParam}`;
 
     // Open new tab
-    chrome.tabs.create({ url: homeEstimateUrl }, () => {
+    browserAPI.tabs.create({ url: homeEstimateUrl }, () => {
       // Keep popup open to show success
       setTimeout(() => {
         showSuccess(extractedData);
@@ -354,65 +388,34 @@ async function copyToClipboard() {
   }
 }
 
-// Download foto e invio al backend per analisi successiva
+// Invia gli URL delle foto al backend che le scaricherà lui
 async function analyzePhotos() {
   if (!extractedData || !Array.isArray(extractedData.photos) || extractedData.photos.length === 0) {
-    showError('Nessuna foto da scaricare');
+    showError('Nessuna foto da analizzare');
     return;
   }
 
   const originalText = analyzePhotosBtn.textContent;
-  analyzePhotosBtn.textContent = '⏳ Download in corso...';
+  analyzePhotosBtn.textContent = '⏳ Invio in corso...';
   analyzePhotosBtn.disabled = true;
 
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab || !tab.id) {
-      throw new Error('Nessuna tab attiva trovata');
-    }
-
-    console.log('Requesting photo download for', extractedData.photos.length, 'photos');
-    let downloadResponse;
-
-    try {
-      downloadResponse = await chrome.tabs.sendMessage(tab.id, {
-        action: 'downloadPhotos',
-        photoUrls: extractedData.photos
-      });
-    } catch (messageError) {
-      if (
-        messageError &&
-        messageError.message &&
-        messageError.message.includes('Receiving end does not exist')
-      ) {
-        await ensureContentScript(tab.id);
-        downloadResponse = await chrome.tabs.sendMessage(tab.id, {
-          action: 'downloadPhotos',
-          photoUrls: extractedData.photos
-        });
-      } else {
-        throw messageError;
-      }
-    }
-
-    const base64Photos = downloadResponse?.success ? downloadResponse.photos : null;
-    const refererUrl = typeof extractedData.url === 'string' ? extractedData.url : tab.url;
+    const [tab] = await browserAPI.tabs.query({ active: true, currentWindow: true });
+    const refererUrl = typeof extractedData.url === 'string' ? extractedData.url : (tab ? tab.url : '');
     const listingId = deriveListingId(refererUrl);
 
-    if (!Array.isArray(base64Photos) || base64Photos.length === 0) {
-      throw new Error('Impossibile scaricare le foto. Apri la galleria dell\\'annuncio e riprova.');
-    }
+    console.log('Sending', extractedData.photos.length, 'photo URLs to backend');
 
-    console.log('Downloaded', base64Photos.length, 'photos as base64');
-
-    const uploadResponse = await fetch('http://localhost:8000/api/analysis/photo-storage/upload-base64', {
+    // Invia gli URL al backend, che si occuperà del download
+    const uploadResponse = await fetch('http://localhost:8000/api/analysis/photo-storage/upload-urls', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        photos: base64Photos,
+        photo_urls: extractedData.photos,
         listing_id: listingId || refererUrl,
+        referer: refererUrl
       })
     });
 
@@ -436,7 +439,13 @@ async function analyzePhotos() {
       delete extractedData.photoCondition;
     }
 
-    chrome.storage.local.set({ lastExtractedData: extractedData });
+    try {
+      if (browserAPI && browserAPI.storage && browserAPI.storage.local) {
+        browserAPI.storage.local.set({ lastExtractedData: extractedData });
+      }
+    } catch (storageError) {
+      console.warn('Could not save to storage:', storageError);
+    }
 
     analyzePhotosBtn.textContent = '✔️ Foto salvate!';
     setTimeout(() => {
@@ -454,15 +463,84 @@ async function analyzePhotos() {
 }
 
 // Event listeners
-extractBtn.addEventListener('click', extractData);
-analyzePhotosBtn.addEventListener('click', analyzePhotos);
-sendBtn.addEventListener('click', sendToHomeEstimate);
-copyBtn.addEventListener('click', copyToClipboard);
+console.log('HomeEstimate Popup: Attaching event listeners...');
+
+if (extractBtn) {
+  // Try multiple ways to attach the event listener
+  console.log('HomeEstimate Popup: Attaching click handler to extract button...');
+
+  // Method 1: addEventListener
+  extractBtn.addEventListener('click', (event) => {
+    console.log('HomeEstimate Popup: Extract button clicked (addEventListener)');
+    event.preventDefault();
+    event.stopPropagation();
+    extractData();
+  }, true);
+
+  // Method 2: onclick property (backup)
+  extractBtn.onclick = (event) => {
+    console.log('HomeEstimate Popup: Extract button clicked (onclick)');
+    event.preventDefault();
+    event.stopPropagation();
+    extractData();
+  };
+
+  // Method 3: Add inline test
+  extractBtn.onmousedown = () => {
+    console.log('HomeEstimate Popup: Mouse down on extract button');
+  };
+
+  extractBtn.onmouseup = () => {
+    console.log('HomeEstimate Popup: Mouse up on extract button');
+  };
+
+  // Make sure the button is not disabled
+  extractBtn.disabled = false;
+  extractBtn.style.pointerEvents = 'auto';
+  extractBtn.style.cursor = 'pointer';
+
+  console.log('HomeEstimate Popup: Extract button listener attached (multiple methods)');
+  console.log('HomeEstimate Popup: Button state:', {
+    disabled: extractBtn.disabled,
+    pointerEvents: extractBtn.style.pointerEvents,
+    cursor: extractBtn.style.cursor
+  });
+} else {
+  console.error('HomeEstimate Popup: Extract button not found!');
+}
+
+if (analyzePhotosBtn) {
+  analyzePhotosBtn.addEventListener('click', analyzePhotos);
+}
+
+if (sendBtn) {
+  sendBtn.addEventListener('click', sendToHomeEstimate);
+}
+
+if (copyBtn) {
+  copyBtn.addEventListener('click', copyToClipboard);
+}
 
 // Check for stored data on popup open
-chrome.storage.local.get(['lastExtractedData'], (result) => {
-  if (result.lastExtractedData) {
-    extractedData = result.lastExtractedData;
-    showSuccess(extractedData);
+console.log('HomeEstimate Popup: Checking for stored data...');
+try {
+  if (browserAPI && browserAPI.storage && browserAPI.storage.local) {
+    browserAPI.storage.local.get(['lastExtractedData'], (result) => {
+      console.log('HomeEstimate Popup: Storage result:', result);
+      if (result.lastExtractedData) {
+        console.log('HomeEstimate Popup: Found stored data, showing success');
+        extractedData = result.lastExtractedData;
+        showSuccess(extractedData);
+      } else {
+        console.log('HomeEstimate Popup: No stored data found');
+      }
+    });
+  } else {
+    console.warn('HomeEstimate Popup: browser storage API not available');
   }
-});
+} catch (error) {
+  console.error('HomeEstimate Popup: Error accessing storage:', error);
+}
+
+console.log('HomeEstimate Popup: Initialization complete');
+console.log('HomeEstimate Popup: Ready for user interaction!');

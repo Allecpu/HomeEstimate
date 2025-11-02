@@ -72,7 +72,27 @@ function addPhotoUrl(photosSet, rawUrl) {
   if (!url || url.startsWith('data:')) return;
 
   const lowered = url.toLowerCase();
-  if (lowered.includes('logo') || lowered.includes('placeholder')) return;
+
+  // Skip logos, placeholders, icons, flags, and static assets
+  if (lowered.includes('logo') ||
+      lowered.includes('placeholder') ||
+      lowered.includes('/flags/') ||
+      lowered.includes('/icons/') ||
+      lowered.includes('.svg') ||
+      lowered.includes('static/common')) {
+    return;
+  }
+
+  // Only accept URLs from img*.idealista.it (actual photos)
+  // Must contain 'img' and 'idealista.it' but id.pro.it.image is optional for some CDN variants
+  if (!url.includes('img') || !url.includes('idealista.it')) {
+    return;
+  }
+
+  // Must be from blur path (actual property photos) or image.master path
+  if (!lowered.includes('/blur/') && !lowered.includes('id.pro.it.image')) {
+    return;
+  }
 
   if (url.startsWith('//')) {
     url = window.location.protocol + url;
@@ -85,6 +105,15 @@ function addPhotoUrl(photosSet, rawUrl) {
   } else if (!/^https?:/i.test(url)) {
     return;
   }
+
+  // Don't transform URLs - Idealista's blur URLs work fine and are good quality
+  // The "blur" URLs are not actually blurred, they're just CDN cached versions
+  // Full-size URLs with /0/0/ pattern return 404, so we use the original URLs
+
+  // Convert webp to jpg for better compatibility (webp works but jpg is more universal)
+  url = url.replace(/\.webp$/i, '.jpg');
+
+  console.log('HomeEstimate: Photo URL accepted:', url);
 
   photosSet.add(url);
 }
@@ -147,7 +176,10 @@ function collectIdealistaDomPhotoCandidates() {
     'img[data-srcset]'
   ];
 
-  document.querySelectorAll(selectors.join(',')).forEach(img => {
+  const matchedImages = document.querySelectorAll(selectors.join(','));
+  console.log(`HomeEstimate: Found ${matchedImages.length} images matching selectors`);
+
+  matchedImages.forEach((img, index) => {
     const candidates = [
       img.currentSrc,
       img.src,
@@ -156,6 +188,10 @@ function collectIdealistaDomPhotoCandidates() {
       img.getAttribute('data-lazy'),
       img.getAttribute('data-srcset')
     ].filter(Boolean);
+
+    if (index < 3) {
+      console.log(`HomeEstimate: Image ${index + 1} candidates:`, candidates);
+    }
 
     candidates.forEach(candidate => {
       if (candidate.includes(',')) {
@@ -169,35 +205,49 @@ function collectIdealistaDomPhotoCandidates() {
     });
   });
 
+  console.log(`HomeEstimate: DOM extraction found ${photosSet.size} unique URLs`);
   return photosSet;
 }
 
 function extractIdealistaPhotos() {
   const photosSet = new Set();
 
+  console.log('HomeEstimate: Starting photo extraction...');
+  console.log('HomeEstimate: Step 1 - About to check data attributes');
+
   try {
+    console.log('HomeEstimate: Step 2 - Inside try block');
     const parseJsonAttribute = attrValue => {
       if (!attrValue) return;
       try {
         const parsed = JSON.parse(attrValue);
+        console.log('HomeEstimate: Found JSON data attribute:', parsed);
         extractPhotoUrlsFromJson(parsed, photosSet);
       } catch (_) {
         // Ignore malformed JSON payloads
       }
     };
 
-    document.querySelectorAll('[data-urls],[data-gallery],[data-gallery-images],[data-images]').forEach(element => {
+    const dataElements = document.querySelectorAll('[data-urls],[data-gallery],[data-gallery-images],[data-images]');
+    console.log(`HomeEstimate: Found ${dataElements.length} elements with data attributes`);
+
+    dataElements.forEach(element => {
       parseJsonAttribute(element.getAttribute('data-urls'));
       parseJsonAttribute(element.getAttribute('data-gallery'));
       parseJsonAttribute(element.getAttribute('data-gallery-images'));
       parseJsonAttribute(element.getAttribute('data-images'));
     });
 
-    document.querySelectorAll('script[type="application/ld+json"]').forEach(script => {
+    const jsonLdScripts = document.querySelectorAll('script[type="application/ld+json"]');
+    console.log(`HomeEstimate: Found ${jsonLdScripts.length} JSON-LD scripts`);
+
+    jsonLdScripts.forEach((script, idx) => {
       const text = script.textContent;
       if (!text) return;
       try {
-        extractPhotoUrlsFromJson(JSON.parse(text), photosSet);
+        const parsed = JSON.parse(text);
+        console.log(`HomeEstimate: JSON-LD ${idx + 1} parsed successfully, type:`, parsed['@type']);
+        extractPhotoUrlsFromJson(parsed, photosSet);
       } catch (_) {
         // Some ld+json blocks may contain multiple JSON objects; try to parse line by line
         text
@@ -214,13 +264,19 @@ function extractIdealistaPhotos() {
       }
     });
 
+    console.log(`HomeEstimate: After JSON-LD extraction: ${photosSet.size} photos`);
+
     const potentialState = window.__INITIAL_STATE__ || window.__state || window.__DATA__;
     if (potentialState) {
+      console.log('HomeEstimate: Found window state object, extracting photos...');
       try {
         extractPhotoUrlsFromJson(potentialState, photosSet);
+        console.log(`HomeEstimate: After window state extraction: ${photosSet.size} photos`);
       } catch (err) {
         console.warn('HomeEstimate: failed to parse initial state photos', err);
       }
+    } else {
+      console.log('HomeEstimate: No window state object found');
     }
 
     const domCandidates = collectIdealistaDomPhotoCandidates();
@@ -229,12 +285,54 @@ function extractIdealistaPhotos() {
     console.warn('HomeEstimate: failed to gather Idealista photos via structured data', err);
   }
 
+  // Try to extract from all script tags (not just JSON-LD) - outside try block
+  console.log('HomeEstimate: Searching for photo URLs in all script tags...');
+  try {
+    const allScripts = document.querySelectorAll('script');
+    console.log(`HomeEstimate: Found ${allScripts.length} total script tags`);
+
+    let scriptsWithPhotos = 0;
+    allScripts.forEach((script, idx) => {
+      try {
+        const text = script.textContent || script.innerHTML;
+        if (!text) return;
+
+        // Look for img*.idealista.it URLs in the script content
+        const urlMatches = text.match(/https?:\/\/img\d*\.idealista\.it\/[^\s"'<>]+/g);
+        if (urlMatches && urlMatches.length > 0) {
+          scriptsWithPhotos++;
+          console.log(`HomeEstimate: Script ${idx + 1} contains ${urlMatches.length} potential photo URLs`);
+          urlMatches.forEach(url => {
+            // Clean up the URL (remove trailing characters that might be part of JS code)
+            const cleanUrl = url.replace(/[,;)}\]]+$/, '');
+            addPhotoUrl(photosSet, cleanUrl);
+          });
+        }
+      } catch (scriptErr) {
+        console.warn(`HomeEstimate: Error processing script ${idx + 1}:`, scriptErr);
+      }
+    });
+
+    console.log(`HomeEstimate: After script search: ${photosSet.size} photos (found URLs in ${scriptsWithPhotos} scripts)`);
+  } catch (err) {
+    console.warn('HomeEstimate: failed to search scripts for photos', err);
+  }
+
   if (photosSet.size === 0) {
+    console.log('HomeEstimate: No photos from JSON, trying DOM extraction...');
     const fallback = collectIdealistaDomPhotoCandidates();
     fallback.forEach(url => photosSet.add(url));
   }
 
-  return Array.from(photosSet);
+  const finalPhotos = Array.from(photosSet);
+  console.log(`HomeEstimate: Extracted ${finalPhotos.length} total photo URLs`);
+
+  // Log first 3 URLs for debugging
+  finalPhotos.slice(0, 3).forEach((url, i) => {
+    console.log(`HomeEstimate: Photo ${i + 1}: ${url}`);
+  });
+
+  return finalPhotos;
 }
 
 // Extract data from Idealista

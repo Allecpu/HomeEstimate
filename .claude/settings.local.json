@@ -36,7 +36,13 @@
       "Bash(where msedge)",
       "Bash(git restore:*)",
       "Bash(git commit:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(..venvScriptspython.exe -m py_compile app/api/photo_analysis.py)",
+      "Bash(..venvScriptspython.exe -m py_compile appapiphoto_analysis.py)",
+      "Bash(.\\venv\\Scripts\\python.exe:*)",
+      "Bash(where:*)",
+      "Bash(python -m py_compile:*)",
+      "Bash(npm run build:*)"
     ],
     "deny": [],
     "ask": []

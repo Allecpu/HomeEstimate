@@ -1,6 +1,7 @@
 import base64
 import binascii
 import hashlib
+import json
 import logging
 import re
 from pathlib import Path
@@ -78,6 +79,15 @@ async def download_photos_for_analysis(photo_urls: List[str], listing_id: Option
     photos_dir = Path("storage/photos") / safe_listing_id
     photos_dir.mkdir(parents=True, exist_ok=True)
 
+    # Clean previous files to avoid stale photos
+    logger.info(f"Cleaning old photos from {photos_dir}")
+    for existing in photos_dir.glob("photo_*.*"):
+        try:
+            existing.unlink()
+            logger.info(f"Deleted old photo: {existing}")
+        except Exception as exc:
+            logger.debug(f"Unable to remove existing photo {existing}: {exc}")
+
     local_paths = []
 
     default_headers = {
@@ -89,13 +99,23 @@ async def download_photos_for_analysis(photo_urls: List[str], listing_id: Option
     elif listing_id and str(listing_id).startswith("http"):
         default_headers["Referer"] = str(listing_id)
 
-    async with httpx.AsyncClient(timeout=30.0, headers=default_headers) as client:
+    async with httpx.AsyncClient(timeout=30.0, headers=default_headers, follow_redirects=True) as client:
         for idx, photo_url in enumerate(photo_urls):
             try:
                 # Download photo
                 logger.info(f"Downloading photo {idx + 1}/{len(photo_urls)}: {photo_url}")
                 response = await client.get(photo_url)
                 response.raise_for_status()
+
+                # Log response details for debugging
+                content_length = len(response.content)
+                content_type = response.headers.get('content-type', 'unknown')
+                logger.info(f"Photo {idx + 1} - Status: {response.status_code}, Size: {content_length} bytes, Type: {content_type}")
+
+                # Skip if the response is too small (likely a placeholder)
+                if content_length < 1024:  # Less than 1 KB
+                    logger.warning(f"Photo {idx + 1} is too small ({content_length} bytes), likely a placeholder. Skipping.")
+                    continue
 
                 # Determine file extension from URL or content-type
                 ext = 'jpg'
@@ -112,7 +132,7 @@ async def download_photos_for_analysis(photo_urls: List[str], listing_id: Option
                     f.write(response.content)
 
                 local_paths.append(str(filepath))
-                logger.info(f"Saved photo to: {filepath}")
+                logger.info(f"Saved photo to: {filepath} ({content_length} bytes)")
 
             except Exception as e:
                 logger.warning(f"Failed to download photo {photo_url}: {e}")
@@ -330,6 +350,56 @@ async def upload_photo_storage_base64(request: PhotoStorageUploadRequest) -> dic
     }
 
 
+class PhotoStorageUploadUrlsRequest(BaseModel):
+    photo_urls: List[str]  # Photo URLs to download
+    listing_id: Optional[str] = None
+    referer: Optional[str] = None
+
+
+@router.post("/photo-storage/upload-urls")
+async def upload_photo_storage_urls(request: PhotoStorageUploadUrlsRequest) -> dict:
+    """
+    Download photos from URLs and save them to storage.
+    This endpoint is used by the browser extension to bypass CORS restrictions.
+    """
+    if not request.photo_urls:
+        raise HTTPException(
+            status_code=400,
+            detail="Nessun URL foto fornito.",
+        )
+
+    try:
+        # Download photos to local storage
+        local_paths = await download_photos_for_analysis(
+            request.photo_urls,
+            request.listing_id,
+            request.referer
+        )
+
+        # Extract listing ID from the path
+        if local_paths:
+            listing_id = local_paths[0].split('/')[-2] if '/' in local_paths[0] else local_paths[0].split('\\')[-2]
+        else:
+            listing_id = _build_storage_identifier(request.listing_id, request.photo_urls)
+
+        return {
+            "listing_id": listing_id,
+            "saved": len(local_paths),
+        }
+    except httpx.HTTPStatusError as exc:
+        logger.error(f"HTTP error downloading photos: {exc}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Errore durante il download delle foto: {exc.response.status_code}",
+        ) from exc
+    except Exception as exc:
+        logger.exception("Unexpected error while downloading photos")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Errore durante il download delle foto: {str(exc)}",
+        ) from exc
+
+
 @router.post("/photo-condition-from-storage", response_model=PhotoConditionResult)
 async def evaluate_photo_condition_from_storage(request: PhotoAnalysisFromStorageRequest) -> PhotoConditionResult:
     safe_listing_id = _build_storage_identifier(request.listing_id, [])
@@ -375,4 +445,92 @@ async def evaluate_photo_condition_from_storage(request: PhotoAnalysisFromStorag
             detail="Analisi non disponibile. Verifica che OPENAI_API_KEY sia configurata.",
         )
 
+    # Save the analysis result to storage for future retrieval
+    try:
+        _save_analysis_result(safe_listing_id, result)
+        logger.info(f"Saved analysis result for listing {safe_listing_id}")
+    except Exception as exc:
+        logger.warning(f"Failed to save analysis result: {exc}")
+        # Don't fail the request if saving fails
+
     return result
+
+
+@router.post("/save-analysis", status_code=200)
+async def save_analysis_result(request: PhotoAnalysisFromStorageRequest, analysis: PhotoConditionResult):
+    """
+    Save an AI analysis result for a listing ID.
+    This allows the frontend to explicitly save analysis results.
+    """
+    safe_listing_id = _build_storage_identifier(request.listing_id, [])
+
+    try:
+        _save_analysis_result(safe_listing_id, analysis)
+        logger.info(f"Saved analysis result for listing {safe_listing_id}")
+        return {"status": "saved", "listing_id": safe_listing_id}
+    except Exception as exc:
+        logger.exception("Failed to save analysis result")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Errore durante il salvataggio dell'analisi: {str(exc)}"
+        ) from exc
+
+
+@router.get("/get-analysis/{listing_id}", response_model=PhotoConditionResult)
+async def get_saved_analysis(listing_id: str) -> Optional[PhotoConditionResult]:
+    """
+    Retrieve a previously saved AI analysis result for a listing ID.
+    Returns 404 if no analysis has been saved for this listing.
+    """
+    safe_listing_id = _build_storage_identifier(listing_id, [])
+
+    try:
+        result = _load_analysis_result(safe_listing_id)
+        if result is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Nessuna analisi salvata trovata per questo annuncio."
+            )
+        logger.info(f"Retrieved saved analysis for listing {safe_listing_id}")
+        return result
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Failed to load analysis result")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Errore durante il recupero dell'analisi: {str(exc)}"
+        ) from exc
+
+
+def _save_analysis_result(listing_id: str, result: PhotoConditionResult) -> None:
+    """Save analysis result to JSON file in storage."""
+    storage_dir = Path("storage/analysis")
+    storage_dir.mkdir(parents=True, exist_ok=True)
+
+    analysis_file = storage_dir / f"{listing_id}.json"
+
+    # Convert Pydantic model to dict for JSON serialization
+    result_dict = result.model_dump() if hasattr(result, 'model_dump') else result.dict()
+
+    with open(analysis_file, 'w', encoding='utf-8') as f:
+        json.dump(result_dict, f, ensure_ascii=False, indent=2)
+
+
+def _load_analysis_result(listing_id: str) -> Optional[PhotoConditionResult]:
+    """Load analysis result from JSON file in storage."""
+    storage_dir = Path("storage/analysis")
+    analysis_file = storage_dir / f"{listing_id}.json"
+
+    if not analysis_file.exists():
+        return None
+
+    try:
+        with open(analysis_file, 'r', encoding='utf-8') as f:
+            result_dict = json.load(f)
+
+        # Convert dict back to Pydantic model
+        return PhotoConditionResult(**result_dict)
+    except Exception as exc:
+        logger.warning(f"Failed to load analysis from {analysis_file}: {exc}")
+        return None

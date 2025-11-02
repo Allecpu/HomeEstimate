@@ -181,6 +181,11 @@
 
     <div id="dataPreview" class="data-preview hidden"></div>
 
+    <!-- Debug info -->
+    <div id="debugInfo" style="background: rgba(255,255,255,0.2); padding: 10px; margin-bottom: 10px; font-size: 11px; border-radius: 4px; display: none;">
+      <div id="debugStatus">Caricamento...</div>
+    </div>
+
     <div id="actions">
       <button id="extractBtn" class="primary">
         Estrai Dati da Questa Pagina
@@ -202,6 +207,65 @@
     <div id="errorMessage" class="error-message hidden"></div>
   </div>
 
+  <script>
+    // Show debug info
+    const debugInfo = document.getElementById('debugInfo');
+    const debugStatus = document.getElementById('debugStatus');
+
+    if (debugInfo) {
+      debugInfo.style.display = 'block';
+      debugStatus.innerHTML = '✓ HTML caricato<br>';
+    }
+
+    // Error handler for debugging
+    window.addEventListener('error', (event) => {
+      console.error('HomeEstimate Popup Error:', event.error);
+
+      // Show error to user
+      const errorDiv = document.getElementById('errorMessage');
+      if (errorDiv) {
+        errorDiv.textContent = 'Errore JS: ' + (event.error?.message || 'Errore sconosciuto');
+        errorDiv.classList.remove('hidden');
+      }
+
+      // Also show in debug
+      if (debugStatus) {
+        debugStatus.innerHTML += '<br>❌ ERRORE: ' + (event.error?.message || event.message || 'Errore sconosciuto') + '<br>';
+        debugStatus.innerHTML += 'File: ' + (event.filename || 'unknown') + '<br>';
+        debugStatus.innerHTML += 'Linea: ' + (event.lineno || 'unknown');
+      }
+    });
+
+    console.log('HomeEstimate Popup HTML: Starting to load...');
+
+    if (debugStatus) {
+      debugStatus.innerHTML += '✓ Event handlers registrati<br>';
+      debugStatus.innerHTML += 'Caricamento popup.js...<br>';
+    }
+  </script>
   <script src="popup.js"></script>
+  <script>
+    // Confirm script loaded
+    if (debugStatus) {
+      debugStatus.innerHTML += '✓ popup.js caricato<br>';
+
+      // Check if button exists and has event listeners
+      const btn = document.getElementById('extractBtn');
+      if (btn) {
+        debugStatus.innerHTML += '✓ Pulsante trovato (ID: ' + btn.id + ')<br>';
+        debugStatus.innerHTML += 'Disabled: ' + btn.disabled + '<br>';
+
+        // Add a test click handler here
+        btn.addEventListener('click', function testClick() {
+          debugStatus.innerHTML += '<br>🎯 CLICK RICEVUTO!<br>';
+          alert('Il pulsante funziona! Il problema è nella funzione extractData()');
+        }, true);
+
+        debugStatus.innerHTML += '✓ Test listener aggiunto<br>';
+      } else {
+        debugStatus.innerHTML += '❌ Pulsante NON trovato!<br>';
+      }
+    }
+  </script>
 </body>
 </html>
