@@ -9,6 +9,7 @@ import { Step3VerifyLocation } from '@/components/wizard/Step3VerifyLocation';
 import { Step4Calculation } from '@/components/wizard/Step4Calculation';
 import { Step5Report } from '@/components/wizard/Step5Report';
 import { PropertyFormData } from '@/lib/validation';
+import type { PhotoConditionResult } from '@/lib/photo-analysis';
 
 type WizardData = Partial<PropertyFormData> & {
   lat?: number;
@@ -19,6 +20,7 @@ type WizardData = Partial<PropertyFormData> & {
   confidence?: number;
   comparables?: number;
   marketTrend?: string;
+  photoCondition?: PhotoConditionResult;
 };
 
 const WIZARD_STEPS = [
@@ -128,7 +130,7 @@ function HomeContent() {
             <Step2CompleteData
               onNext={handleStep2Complete}
               onBack={handleBack}
-              initialData={wizardData as PropertyFormData}
+              initialData={wizardData}
             />
           )}
 
@@ -136,7 +138,7 @@ function HomeContent() {
             <Step3VerifyLocation
               onNext={handleStep3Complete}
               onBack={handleBack}
-              propertyData={wizardData as PropertyFormData & { lat?: number; lng?: number }}
+              propertyData={wizardData as PropertyFormData & { lat?: number; lng?: number; photoCondition?: PhotoConditionResult }}
             />
           )}
 
@@ -144,14 +146,14 @@ function HomeContent() {
             <Step4Calculation
               onNext={handleStep4Complete}
               onBack={handleBack}
-              propertyData={wizardData as PropertyFormData & { lat?: number; lng?: number }}
+              propertyData={wizardData as PropertyFormData & { lat?: number; lng?: number; photoCondition?: PhotoConditionResult }}
             />
           )}
 
           {currentStep === 5 && wizardData.estimatedValue && (
             <Step5Report
               onBack={handleBack}
-              propertyData={wizardData as PropertyFormData & { lat?: number; lng?: number }}
+              propertyData={wizardData as PropertyFormData & { lat?: number; lng?: number; photoCondition?: PhotoConditionResult }}
               estimationData={{
                 estimatedValue: wizardData.estimatedValue,
                 pricePerSqm: wizardData.pricePerSqm || 0,

@@ -1,5 +1,6 @@
 import hashlib
 import logging
+import re
 from pathlib import Path
 from typing import List, Optional
 
@@ -25,10 +26,28 @@ class PhotoAnalysisRequest(BaseModel):
 class PhotoAnalysisWithDownloadRequest(BaseModel):
     photos: List[HttpUrl]
     listing_id: Optional[str] = None
+    referer: Optional[HttpUrl] = None
     locale: Optional[str] = "it"
 
 
-async def download_photos_for_analysis(photo_urls: List[str], listing_id: Optional[str] = None) -> List[str]:
+class PhotoAnalysisBase64Request(BaseModel):
+    photos: List[str]  # Base64 data URLs
+    listing_id: Optional[str] = None
+    locale: Optional[str] = "it"
+
+
+def _build_storage_identifier(raw_identifier: Optional[str], photo_urls: List[str]) -> str:
+    base = (raw_identifier or '').strip()
+    if base:
+        slug = re.sub(r'[^a-zA-Z0-9_-]+', '-', base).strip('-').lower()
+        if slug:
+            base = slug[:64]
+    if not base:
+        base = hashlib.md5(''.join(photo_urls).encode()).hexdigest()[:12]
+    return base
+
+
+async def download_photos_for_analysis(photo_urls: List[str], listing_id: Optional[str] = None, referer: Optional[str] = None) -> List[str]:
     """
     Download photos from URLs to local storage for analysis.
     Returns list of local file paths.
@@ -41,16 +60,24 @@ async def download_photos_for_analysis(photo_urls: List[str], listing_id: Option
         List of local file paths where photos were saved
     """
     # Create unique ID if not provided
-    if not listing_id:
-        listing_id = hashlib.md5(''.join(photo_urls).encode()).hexdigest()[:12]
+    safe_listing_id = _build_storage_identifier(listing_id, photo_urls)
 
     # Create photos directory if it doesn't exist
-    photos_dir = Path("storage/photos") / listing_id
+    photos_dir = Path("storage/photos") / safe_listing_id
     photos_dir.mkdir(parents=True, exist_ok=True)
 
     local_paths = []
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    default_headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+    }
+    if referer:
+        default_headers["Referer"] = str(referer)
+    elif listing_id and str(listing_id).startswith("http"):
+        default_headers["Referer"] = str(listing_id)
+
+    async with httpx.AsyncClient(timeout=30.0, headers=default_headers) as client:
         for idx, photo_url in enumerate(photo_urls):
             try:
                 # Download photo
@@ -121,7 +148,8 @@ async def evaluate_photo_condition_with_download(request: PhotoAnalysisWithDownl
         logger.info(f"Downloading {len(request.photos)} photos...")
         local_paths = await download_photos_for_analysis(
             [str(url) for url in request.photos],
-            listing_id=request.listing_id
+            listing_id=request.listing_id,
+            referer=str(request.referer) if request.referer else str(request.listing_id) if request.listing_id else None,
         )
 
         if not local_paths:
@@ -144,6 +172,47 @@ async def evaluate_photo_condition_with_download(request: PhotoAnalysisWithDownl
         raise
     except Exception as exc:
         logger.exception("Unexpected error during photo analysis with download")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Errore durante l'analisi delle foto: {str(exc)}"
+        ) from exc
+
+    if result is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Analisi non disponibile. Verifica che OPENAI_API_KEY sia configurata.",
+        )
+
+    return result
+
+
+@router.post("/photo-condition-base64", response_model=PhotoConditionResult)
+async def evaluate_photo_condition_base64(request: PhotoAnalysisBase64Request) -> PhotoConditionResult:
+    """
+    Analyze photos from base64 data URLs (from browser extension).
+    Photos are already downloaded by the browser extension.
+    """
+    if not request.photos:
+        raise HTTPException(
+            status_code=400,
+            detail="Nessuna foto fornita.",
+        )
+
+    try:
+        logger.info(f"Analyzing {len(request.photos)} photos from base64...")
+
+        # Pass base64 data URLs directly to analyze_photo_condition
+        result = await analyze_photo_condition(
+            request.photos,
+            locale=request.locale or "it",
+        )
+
+    except PhotoConditionServiceError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Unexpected error during photo analysis from base64")
         raise HTTPException(
             status_code=500,
             detail=f"Errore durante l'analisi delle foto: {str(exc)}"

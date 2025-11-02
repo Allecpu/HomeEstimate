@@ -1,3 +1,4 @@
+import ast
 import base64
 import json
 import logging
@@ -6,15 +7,16 @@ from pathlib import Path
 from typing import Iterable, List, Optional
 
 import httpx
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
+BASE_DIR = Path(__file__).resolve().parents[2]
 
 PHOTO_CONDITION_LABELS = ("da_ristrutturare", "discreto", "buono", "ottimo")
 
 
 class PhotoConditionPerPhoto(BaseModel):
-    url: HttpUrl
+    url: Optional[str] = None
     summary: str
     issues: Optional[str] = None
 
@@ -61,6 +63,12 @@ def _clean_json_text(raw: str) -> str:
             if candidate:
                 text = candidate
                 break
+
+    if not text.startswith(("{", "[")):
+        start = text.find("{")
+        end = text.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            text = text[start:end + 1]
 
     return text.strip()
 
@@ -181,12 +189,13 @@ async def analyze_photo_condition(
         logger.info("OPENAI_API_KEY not configured; skipping photo condition analysis.")
         return None
 
-    messages = _build_messages(urls[:8], locale)
+    messages = _build_messages(urls[:6], locale)
     request_payload = {
         "model": "gpt-4o-mini",
         "messages": messages,
         "temperature": 0.2,
         "max_completion_tokens": 600,
+        "response_format": {"type": "json_object"},
     }
 
     headers = {
@@ -208,6 +217,15 @@ async def analyze_photo_condition(
 
     data = response.json()
 
+    try:
+        logs_dir = BASE_DIR / "storage" / "logs"
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        (logs_dir / "last_photo_analysis_raw_response.txt").write_text(
+            response.text, encoding="utf-8"
+        )
+    except Exception as log_exc:  # noqa: BLE001
+        logger.debug("Unable to persist raw API response: %s", log_exc)
+
     raw_content = data.get("choices", [{}])[0].get("message", {}).get("content")
     if raw_content is None:
         logger.warning("Unexpected OpenAI response structure: %s", data)
@@ -224,8 +242,28 @@ async def analyze_photo_condition(
     try:
         parsed = json.loads(_clean_json_text(content_text))
     except json.JSONDecodeError as exc:
-        logger.warning("Failed to parse JSON from photo analysis response: %s", content_text)
-        raise PhotoConditionServiceError("Formato risposta non valido dal servizio di analisi immagini.") from exc
+        logger.warning(
+            "Failed to parse JSON from photo analysis response (json error=%s). Raw content: %s",
+            exc,
+            content_text,
+        )
+        try:
+            logs_dir = BASE_DIR / "storage" / "logs"
+            logs_dir.mkdir(parents=True, exist_ok=True)
+            failure_path = logs_dir / "last_photo_analysis_response.txt"
+            failure_path.write_text(content_text, encoding="utf-8")
+        except Exception as log_exc:  # noqa: BLE001
+            logger.debug("Unable to persist raw photo analysis response: %s", log_exc)
+        try:
+            fallback_obj = ast.literal_eval(_clean_json_text(content_text))
+        except (ValueError, SyntaxError) as fallback_exc:
+            logger.warning("Fallback literal_eval also failed: %s", fallback_exc)
+            raise PhotoConditionServiceError("Formato risposta non valido dal servizio di analisi immagini.") from exc
+        else:
+            if isinstance(fallback_obj, dict):
+                parsed = fallback_obj
+            else:
+                raise PhotoConditionServiceError("Formato risposta non valido dal servizio di analisi immagini.") from exc
 
     if "per_photo" not in parsed:
         parsed["per_photo"] = []
@@ -241,6 +279,16 @@ async def analyze_photo_condition(
             per_photo.append(PhotoConditionPerPhoto(url=url, summary=summary, issues=issues))
         except Exception as exc:
             logger.debug("Skipping photo entry due to validation error: %s", exc)
+
+    try:
+        logs_dir = BASE_DIR / "storage" / "logs"
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        (logs_dir / "last_photo_analysis_parsed.json").write_text(
+            json.dumps(parsed, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception as log_exc:  # noqa: BLE001
+        logger.debug("Unable to persist parsed photo analysis payload: %s", log_exc)
 
     try:
         result = PhotoConditionResult(

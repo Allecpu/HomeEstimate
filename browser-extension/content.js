@@ -4,7 +4,8 @@ console.log('HomeEstimate: Content script loaded');
 
 // Function to extract number from text
 function extractNumber(rawText) {
-  if (!text) return null;
+  if (rawText === undefined || rawText === null) return null;
+  let text = String(rawText);
   // Remove whitespace and convert Italian number format
   text = text.replace(/\./g, '').replace(',', '.').trim();
   const match = text.match(/\d+(?:\.\d+)?/);
@@ -712,11 +713,61 @@ function extractPropertyData() {
   return null;
 }
 
+// Download photos as base64
+async function downloadPhotosAsBase64(photoUrls) {
+  const base64Photos = [];
+
+  for (let i = 0; i < Math.min(photoUrls.length, 8); i++) {
+    const url = photoUrls[i];
+    try {
+      console.log(`HomeEstimate: Downloading photo ${i + 1}/${photoUrls.length}: ${url}`);
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        console.warn(`Failed to fetch photo: ${response.status} ${response.statusText}`);
+        continue;
+      }
+
+      const blob = await response.blob();
+      const base64 = await blobToBase64(blob);
+
+      base64Photos.push(base64);
+      console.log(`HomeEstimate: Converted photo ${i + 1} to base64`);
+    } catch (error) {
+      console.error(`Failed to download photo ${url}:`, error);
+    }
+  }
+
+  return base64Photos;
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'extractData') {
+  if (request.action === 'ping') {
+    sendResponse({ success: true });
+    return true;
+  } else if (request.action === 'extractData') {
     const data = extractPropertyData();
     sendResponse({ success: true, data });
+  } else if (request.action === 'downloadPhotos') {
+    // Download photos as base64 (async operation)
+    downloadPhotosAsBase64(request.photoUrls)
+      .then(base64Photos => {
+        sendResponse({ success: true, photos: base64Photos });
+      })
+      .catch(error => {
+        sendResponse({ success: false, error: error.message });
+      });
+    return true; // Keep message channel open for async response
   }
   return true;
 });
@@ -732,8 +783,6 @@ window.addEventListener('load', () => {
     }
   }, 2000);
 });
-
-
 
 
 

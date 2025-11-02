@@ -8,9 +8,31 @@ const successEl = document.getElementById('success');
 const errorEl = document.getElementById('error');
 const dataPreviewEl = document.getElementById('dataPreview');
 const extractBtn = document.getElementById('extractBtn');
+const analyzePhotosBtn = document.getElementById('analyzePhotosBtn');
 const sendBtn = document.getElementById('sendBtn');
 const copyBtn = document.getElementById('copyBtn');
 const errorMessageEl = document.getElementById('errorMessage');
+
+function deriveListingId(url) {
+  if (!url) return undefined;
+  try {
+    const parsed = new URL(url);
+    const segments = [parsed.hostname, ...parsed.pathname.split('/')].filter(Boolean);
+    const combined = segments.join('-');
+    const normalized = combined
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+    if (!normalized) {
+      return undefined;
+    }
+    return normalized.length > 64 ? normalized.slice(-64) : normalized;
+  } catch (error) {
+    console.warn('Unable to derive listing id from url', url, error);
+    return undefined;
+  }
+}
 
 const FIELD_MAP = [
   { key: 'title', label: 'Titolo' },
@@ -190,6 +212,11 @@ function showSuccess(data) {
   copyBtn.classList.remove('hidden');
   errorMessageEl.classList.add('hidden');
 
+  // Show analyze photos button if there are photos
+  if (data.photos && data.photos.length > 0) {
+    analyzePhotosBtn.classList.remove('hidden');
+  }
+
   renderDataPreview(data);
 }
 
@@ -318,8 +345,129 @@ async function copyToClipboard() {
   }
 }
 
+// Analyze photos with AI
+async function analyzePhotos() {
+  if (!extractedData || !extractedData.photos || extractedData.photos.length === 0) {
+    showError('Nessuna foto da analizzare');
+    return;
+  }
+
+  // Change button text to show loading
+  const originalText = analyzePhotosBtn.textContent;
+  analyzePhotosBtn.textContent = '⏳ Analisi in corso...';
+  analyzePhotosBtn.disabled = true;
+
+  try {
+    // Get current tab
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+    // Request content script to download photos as base64
+    console.log('Requesting photo download for', extractedData.photos.length, 'photos');
+    let downloadResponse;
+
+    try {
+      downloadResponse = await chrome.tabs.sendMessage(tab.id, {
+        action: 'downloadPhotos',
+        photoUrls: extractedData.photos
+      });
+    } catch (messageError) {
+      if (
+        messageError &&
+        messageError.message &&
+        messageError.message.includes('Receiving end does not exist')
+      ) {
+        await ensureContentScript(tab.id);
+        downloadResponse = await chrome.tabs.sendMessage(tab.id, {
+          action: 'downloadPhotos',
+          photoUrls: extractedData.photos
+        });
+      } else {
+        throw messageError;
+      }
+    }
+
+    let analysis;
+    const base64Photos = downloadResponse?.success ? downloadResponse.photos : null;
+
+    const refererUrl = typeof extractedData.url === 'string' ? extractedData.url : undefined;
+    const listingId = deriveListingId(refererUrl);
+
+    if (Array.isArray(base64Photos) && base64Photos.length > 0) {
+      console.log('Downloaded', base64Photos.length, 'photos as base64');
+
+      const base64Response = await fetch('http://localhost:8000/api/analysis/photo-condition-base64', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          photos: base64Photos,
+          listing_id: listingId || refererUrl,
+          locale: 'it'
+        })
+      });
+
+      if (!base64Response.ok) {
+        const errorData = await base64Response.json();
+        throw new Error(errorData.detail || 'Errore durante l\'analisi foto');
+      }
+
+      analysis = await base64Response.json();
+      console.log('Photo analysis result (base64):', analysis);
+    } else {
+      console.warn('Base64 download failed, falling back to backend download');
+
+      const fallbackResponse = await fetch('http://localhost:8000/api/analysis/photo-condition-with-download', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          photos: extractedData.photos,
+          listing_id: listingId,
+          referer: refererUrl,
+          locale: 'it'
+        })
+      });
+
+      if (!fallbackResponse.ok) {
+        const errorData = await fallbackResponse.json();
+        throw new Error(errorData.detail || 'Errore durante l\'analisi foto (download backend)');
+      }
+
+      analysis = await fallbackResponse.json();
+      console.log('Photo analysis result (backend download):', analysis);
+    }
+
+    // Add analysis result to extracted data
+    extractedData.photoCondition = analysis;
+    extractedData.state = analysis.label;
+
+    // Show success message
+    analyzePhotosBtn.textContent = '✓ Analisi completata!';
+    setTimeout(() => {
+      analyzePhotosBtn.textContent = originalText;
+      analyzePhotosBtn.disabled = false;
+      showSuccess(extractedData);
+    }, 2000);
+
+  } catch (error) {
+    console.error('Photo analysis error:', error);
+    analyzePhotosBtn.textContent = originalText;
+    analyzePhotosBtn.disabled = false;
+
+    // Show specific error message
+    if (error.message.includes('429')) {
+      showError('Rate limit OpenAI superato. Attendi qualche minuto e riprova.');
+    } else {
+      showError(error.message || 'Errore durante l\'analisi delle foto');
+    }
+  }
+}
+
 // Event listeners
 extractBtn.addEventListener('click', extractData);
+analyzePhotosBtn.addEventListener('click', analyzePhotos);
 sendBtn.addEventListener('click', sendToHomeEstimate);
 copyBtn.addEventListener('click', copyToClipboard);
 

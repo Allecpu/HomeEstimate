@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { useForm, Controller, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AlertCircle, CheckCircle2, Home } from 'lucide-react';
+import { AlertCircle, Camera, CheckCircle2, Home } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,11 +13,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { propertySchema, type PropertyFormData, getMissingFields, calculateDataCompleteness } from '@/lib/validation';
 import { Progress } from '@/components/ui/progress';
+import type { PhotoConditionLabel, PhotoConditionResult } from '@/lib/photo-analysis';
+
+const PHOTO_CONDITION_LABELS: Record<PhotoConditionLabel, string> = {
+  da_ristrutturare: 'Da ristrutturare',
+  discreto: 'Discreto',
+  buono: 'Buono',
+  ottimo: 'Ottimo',
+};
 
 interface Step2Props {
   onNext: (data: PropertyFormData) => void;
   onBack: () => void;
-  initialData?: Partial<PropertyFormData>;
+  initialData?: Partial<PropertyFormData> & { photoCondition?: PhotoConditionResult };
 }
 
 export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
@@ -103,6 +111,11 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
     const floored = Math.floor(parsed);
     return Number.isFinite(floored) ? floored : undefined;
   };
+
+  const photoCondition = initialData?.photoCondition;
+  const conditionScore = photoCondition ? Math.round(photoCondition.score) : 0;
+  const conditionConfidence = photoCondition ? Math.round(photoCondition.confidence * 100) : 0;
+  const photoHighlights = photoCondition?.per_photo?.slice(0, 3) ?? [];
 
   const processedData = useMemo(() => {
     if (!initialData) {
@@ -762,6 +775,76 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
               />
               <Label htmlFor="hasAirConditioning" className="cursor-pointer">Aria condizionata</Label>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Analisi Foto */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Camera className="w-5 h-5" />
+              Analisi delle Foto
+            </CardTitle>
+            <CardDescription>
+              Risultato dell&apos;analisi visiva eseguita tramite l&apos;estensione browser.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {photoCondition ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-500">Condizione stimata</p>
+                    <p className="text-xl font-semibold text-gray-900">
+                      {PHOTO_CONDITION_LABELS[photoCondition.label] ?? photoCondition.label}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Punteggio qualità (0-100)</p>
+                    <div className="flex items-center gap-3">
+                      <Progress value={conditionScore} className="w-full h-2" />
+                      <span className="text-sm font-medium text-gray-700 min-w-[3ch] text-right">
+                        {conditionScore}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Confidenza modello</p>
+                    <p className="text-xl font-semibold text-gray-900">
+                      {conditionConfidence}%
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-500">Sintesi</p>
+                  <p className="text-sm leading-relaxed text-gray-700">
+                    {photoCondition.reasoning}
+                  </p>
+                </div>
+
+                {photoHighlights.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm text-gray-500">Dettagli principali</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {photoHighlights.map((item, index) => (
+                        <div key={`${item.url}-${index}`} className="rounded-md border border-gray-200 p-3">
+                          <p className="text-sm font-medium text-gray-800">{item.summary}</p>
+                          {item.issues && (
+                            <p className="mt-1 text-xs text-red-600">Criticità: {item.issues}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
+                Nessuna analisi disponibile. Usa il pulsante <span className="font-medium">Analizza Foto (AI)</span> nell&apos;estensione per generare una valutazione automatica
+                dello stato dell&apos;immobile.
+              </div>
+            )}
           </CardContent>
         </Card>
 

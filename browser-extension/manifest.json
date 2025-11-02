@@ -27,7 +27,7 @@
   "content_scripts": [
     {
       "matches": [
-        "https://www.idealista.it/immobile/*",
+        "https://*.idealista.it/*immobile/*",
         "https://www.immobiliare.it/*",
         "https://www.casa.it/*"
       ],

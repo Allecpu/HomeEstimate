@@ -25,7 +25,18 @@
       "Bash(node test-completeness.js:*)",
       "Bash(node test-nan.js:*)",
       "Bash(cat:*)",
-      "Bash(.gitignore)"
+      "Bash(.gitignore)",
+      "Bash(tasklist:*)",
+      "Bash(.\\venv\\Scripts\\python.exe -m uvicorn:*)",
+      "Bash(./venv/Scripts/playwright.exe install:*)",
+      "Bash(dir:*)",
+      "Bash(ping:*)",
+      "Bash(nul)",
+      "Bash(where chrome)",
+      "Bash(where msedge)",
+      "Bash(git restore:*)",
+      "Bash(git commit:*)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []

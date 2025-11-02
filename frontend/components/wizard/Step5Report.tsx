@@ -1,16 +1,17 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { FileText, Home, TrendingUp, Calculator, DollarSign, Calendar } from 'lucide-react';
+import { FileText, Home, TrendingUp, Calculator, DollarSign, Calendar, Camera } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PropertyFormData } from '@/lib/validation';
+import type { PhotoConditionLabel, PhotoConditionResult } from '@/lib/photo-analysis';
 
 interface Step5Props {
   onBack: () => void;
-  propertyData: PropertyFormData & { lat?: number; lng?: number };
+  propertyData: PropertyFormData & { lat?: number; lng?: number; photoCondition?: PhotoConditionResult };
   estimationData: {
     estimatedValue: number;
     pricePerSqm: number;
@@ -28,6 +29,13 @@ interface RentalParams {
   occupancyRate: number;
   commissionRate: number;
 }
+
+const PHOTO_CONDITION_LABELS: Record<PhotoConditionLabel, string> = {
+  da_ristrutturare: 'Da ristrutturare',
+  discreto: 'Discreto',
+  buono: 'Buono',
+  ottimo: 'Ottimo',
+};
 
 export function Step5Report({ onBack, propertyData, estimationData }: Step5Props) {
   // Parametri modificabili per le simulazioni affitto
@@ -79,6 +87,11 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
     };
   }, [rentalParams]);
 
+  const photoCondition = propertyData.photoCondition;
+  const photoConditionScore = photoCondition ? Math.round(photoCondition.score) : 0;
+  const photoConditionConfidence = photoCondition ? Math.round(photoCondition.confidence * 100) : 0;
+  const photoConditionHighlights = photoCondition?.per_photo?.slice(0, 3) ?? [];
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('it-IT', {
       style: 'currency',
@@ -116,6 +129,68 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
             Analisi dettagliata del valore immobiliare e simulazioni di rendimento
           </CardDescription>
         </CardHeader>
+      </Card>
+
+      {/* Analisi Foto */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Camera className="w-5 h-5" />
+            Stato dell&apos;immobile dalle foto
+          </CardTitle>
+          <CardDescription>
+            Risultato dell&apos;analisi visiva automatica eseguita dall&apos;estensione.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {photoCondition ? (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Condizione stimata</p>
+                  <p className="text-2xl font-semibold">
+                    {PHOTO_CONDITION_LABELS[photoCondition.label] ?? photoCondition.label}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Punteggio qualità</p>
+                  <p className="text-2xl font-semibold">{photoConditionScore}</p>
+                  <p className="text-xs text-muted-foreground">Scala 0-100</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Confidenza modello</p>
+                  <p className="text-2xl font-semibold">{photoConditionConfidence}%</p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Sintesi</p>
+                <p className="text-sm leading-relaxed text-gray-700">{photoCondition.reasoning}</p>
+              </div>
+
+              {photoConditionHighlights.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">Highlight foto</p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {photoConditionHighlights.map((item, index) => (
+                      <div key={`${item.url}-${index}`} className="rounded-md border border-gray-200 p-3">
+                        <p className="text-sm font-medium text-gray-800">{item.summary}</p>
+                        {item.issues && (
+                          <p className="mt-1 text-xs text-red-600">Criticità: {item.issues}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-gray-600">
+              Nessuna analisi foto disponibile. Torna all&apos;estensione e usa il pulsante&nbsp;
+              <span className="font-medium">Analizza Foto (AI)</span> per ottenere la valutazione automatica.
+            </p>
+          )}
+        </CardContent>
       </Card>
 
       {/* Prezzi Immobiliari Zona */}
