@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { FileText, Home, TrendingUp, Calculator, DollarSign, Calendar, Camera, Building2, MapPin } from 'lucide-react';
+import { FileText, Home, TrendingUp, Calculator, DollarSign, Calendar, Camera, Building2, MapPin, Link as LinkIcon } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { PropertyFormData } from '@/lib/validation';
 import type { PhotoConditionLabel, PhotoConditionResult } from '@/lib/photo-analysis';
+
+const OMI_DEFAULT_URL = 'https://www.agenziaentrate.gov.it/portale/omi';
 
 interface Step5Props {
   onBack: () => void;
@@ -25,17 +27,37 @@ interface Step5Props {
     confidence: number;
     comparables: number;
     marketTrend: string;
-    omiData?: {
-      comune: string;
-      zona?: string;
-      valoreMin: number;
-      valoreMax: number;
-      valoreNormale: number;
-      semestre: string;
-      stato_conservazione?: string;
-      fonte: string;
-    };
+    omiData?: OMIDataResult;
   };
+}
+
+interface OMIQuotationRaw {
+  zona_omi: string;
+  property_type: string;
+  stato_conservazione?: string;
+  prezzo_acquisto_min?: number;
+  prezzo_acquisto_max?: number;
+  prezzo_acquisto_medio?: number;
+  prezzo_affitto_min?: number;
+  prezzo_affitto_max?: number;
+  prezzo_affitto_medio?: number;
+}
+
+interface OMIDataResult {
+  comune: string;
+  zona?: string;
+  valoreMin: number;
+  valoreMax: number;
+  valoreNormale: number;
+  semestre: string;
+  stato_conservazione?: string;
+  fonte: string;
+  property_type?: string;
+  prezzoAffittoMin?: number;
+  prezzoAffittoMax?: number;
+  prezzoAffittoMedio?: number;
+  fonteUrl?: string | null;
+  quotationsRaw?: OMIQuotationRaw[] | null;
 }
 
 interface RentalParams {
@@ -111,6 +133,37 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
   const photoConditionScore = photoCondition ? Math.round(photoCondition.score) : 0;
   const photoConditionConfidence = photoCondition ? Math.round(photoCondition.confidence * 100) : 0;
   const photoConditionHighlights = photoCondition?.per_photo?.slice(0, 3) ?? [];
+
+  const formatSentenceCase = (value: string) => {
+    return value
+      .split(/[_-]/)
+      .filter(Boolean)
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(' ');
+  };
+
+  const omiData = estimationData.omiData;
+  const hasOmiData = Boolean(omiData);
+  const omiAverageRent = omiData?.prezzoAffittoMedio ?? null;
+  const hasRentData = Boolean(
+    omiData &&
+    (omiData.prezzoAffittoMin || omiData.prezzoAffittoMax || omiData.prezzoAffittoMedio)
+  );
+  const quotationsCount = omiData?.quotationsRaw?.length ?? 0;
+  const omiFonteUrl = omiData?.fonte && omiData.fonte.toLowerCase().includes('omi')
+    ? omiData.fonteUrl ?? OMI_DEFAULT_URL
+    : undefined;
+  const propertyTypeLabel = omiData?.property_type ? formatSentenceCase(omiData.property_type) : null;
+  const stateLabel = omiData?.stato_conservazione ? formatSentenceCase(omiData.stato_conservazione) : null;
+  const rentComparison = useMemo(() => {
+    if (omiAverageRent === null || omiAverageRent <= 0) {
+      return null;
+    }
+    const delta = rentalParams.monthlyRent - omiAverageRent;
+    const percentage = omiAverageRent > 0 ? (delta / omiAverageRent) * 100 : 0;
+    const direction = delta > 0 ? 'above' : delta < 0 ? 'below' : 'equal';
+    return { delta, percentage, direction };
+  }, [omiAverageRent, rentalParams.monthlyRent]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('it-IT', {
@@ -225,21 +278,26 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
       </Card>
 
       {/* Dati OMI */}
-      {estimationData.omiData && (
+      {hasOmiData ? (
         <Card className="border-blue-200 bg-blue-50/30">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
+            <CardTitle className="flex flex-wrap items-center gap-2 text-lg">
               <Building2 className="w-5 h-5 text-blue-600" />
               Dati OMI - Osservatorio Mercato Immobiliare
-              <Badge variant={estimationData.omiData.fonte === 'OMI - Dati reali' ? 'default' : 'secondary'}>
-                {estimationData.omiData.fonte}
+              <Badge variant={omiData?.fonte === 'OMI - Dati reali' ? 'default' : 'secondary'}>
+                {omiData?.fonte}
               </Badge>
+              {quotationsCount > 0 && (
+                <Badge variant="outline" className="border-blue-200 bg-white text-blue-700">
+                  {quotationsCount} quotazioni
+                </Badge>
+              )}
             </CardTitle>
             <CardDescription>
-              Quotazioni ufficiali dell&apos;Agenzia delle Entrate per il comune di {estimationData.omiData.comune}
+              Quotazioni ufficiali dell&apos;Agenzia delle Entrate per il comune di {omiData?.comune}
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-white border border-blue-200 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-2">
@@ -247,11 +305,16 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
                   <p className="text-sm text-gray-600">Comune</p>
                 </div>
                 <p className="text-lg font-semibold text-gray-900">
-                  {estimationData.omiData.comune}
+                  {omiData?.comune}
                 </p>
-                {estimationData.omiData.zona && (
+                {omiData?.zona && (
                   <p className="text-sm text-gray-500 mt-1">
-                    Zona: {estimationData.omiData.zona}
+                    Zona: {omiData.zona}
+                  </p>
+                )}
+                {propertyTypeLabel && (
+                  <p className="text-xs text-gray-500 mt-2">
+                    Tipologia OMI: {propertyTypeLabel}
                   </p>
                 )}
               </div>
@@ -262,19 +325,19 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
                   <p className="text-sm text-gray-600">Periodo di riferimento</p>
                 </div>
                 <p className="text-lg font-semibold text-gray-900">
-                  {estimationData.omiData.semestre}
+                  {omiData?.semestre}
                 </p>
-                {estimationData.omiData.stato_conservazione && (
-                  <p className="text-sm text-gray-500 mt-1 capitalize">
-                    Stato: {estimationData.omiData.stato_conservazione}
-                  </p>
+                {stateLabel && (
+                  <Badge variant="outline" className="mt-2 border-blue-200 bg-blue-50 text-blue-700 capitalize">
+                    {stateLabel}
+                  </Badge>
                 )}
               </div>
 
               <div className="bg-white border border-blue-200 rounded-lg p-4">
                 <p className="text-sm text-gray-600 mb-2">Valore OMI medio</p>
                 <p className="text-2xl font-bold text-blue-900">
-                  {formatCurrency(estimationData.omiData.valoreNormale)} / m²
+                  {formatCurrency(omiData?.valoreNormale ?? 0)} / m²
                 </p>
               </div>
             </div>
@@ -285,20 +348,76 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
                 <div className="text-center flex-1">
                   <p className="text-xs text-gray-500 mb-1">Minimo</p>
                   <p className="text-lg font-semibold text-gray-900">
-                    {formatCurrency(estimationData.omiData.valoreMin)}
+                    {formatCurrency(omiData?.valoreMin ?? 0)}
                   </p>
                 </div>
                 <div className="flex-1 h-2 bg-gradient-to-r from-red-200 via-yellow-200 to-green-200 rounded-full" />
                 <div className="text-center flex-1">
                   <p className="text-xs text-gray-500 mb-1">Massimo</p>
                   <p className="text-lg font-semibold text-gray-900">
-                    {formatCurrency(estimationData.omiData.valoreMax)}
+                    {formatCurrency(omiData?.valoreMax ?? 0)}
                   </p>
                 </div>
               </div>
             </div>
 
-            {estimationData.omiData.fonte === 'OMI - Dati reali' && (
+            {hasRentData && (
+              <div className="bg-white border border-blue-200 rounded-lg p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-blue-600" />
+                  <p className="text-sm text-gray-600">Canoni di locazione OMI (mensili)</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Minimo</p>
+                    <p className="text-lg font-semibold text-gray-900">
+                      {omiData?.prezzoAffittoMin ? formatCurrency(omiData.prezzoAffittoMin) : 'n/d'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Medio</p>
+                    <p className="text-lg font-semibold text-gray-900">
+                      {omiAverageRent ? formatCurrency(omiAverageRent) : 'n/d'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Massimo</p>
+                    <p className="text-lg font-semibold text-gray-900">
+                      {omiData?.prezzoAffittoMax ? formatCurrency(omiData.prezzoAffittoMax) : 'n/d'}
+                    </p>
+                  </div>
+                </div>
+                {rentComparison && omiAverageRent && (
+                  <div className="rounded-md bg-blue-50 border border-blue-200 p-3 text-sm text-blue-900">
+                    {rentComparison.direction === 'equal' ? (
+                      <>
+                        Il canone mensile stimato con i tuoi parametri è in linea con la media OMI
+                        ({formatCurrency(omiAverageRent)}).
+                      </>
+                    ) : rentComparison.direction === 'above' ? (
+                      <>
+                        Il canone mensile impostato ({formatCurrency(rentalParams.monthlyRent)}) è superiore di
+                        {` ${formatCurrency(Math.abs(rentComparison.delta))} `}
+                        ({formatNumber(Math.abs(rentComparison.percentage), 1)}%) rispetto al canone medio OMI
+                        ({formatCurrency(omiAverageRent)}).
+                      </>
+                    ) : (
+                      <>
+                        Il canone mensile impostato ({formatCurrency(rentalParams.monthlyRent)}) è inferiore di
+                        {` ${formatCurrency(Math.abs(rentComparison.delta))} `}
+                        ({formatNumber(Math.abs(rentComparison.percentage), 1)}%) rispetto al canone medio OMI
+                        ({formatCurrency(omiAverageRent)}).
+                      </>
+                    )}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Valori indicativi forniti dall&apos;OMI per immobili comparabili nella stessa zona e tipologia.
+                </p>
+              </div>
+            )}
+
+            {omiData?.fonte === 'OMI - Dati reali' && (
               <div className="bg-blue-100 border border-blue-300 rounded-lg p-3">
                 <p className="text-sm text-blue-900">
                   <strong>ℹ️ Nota:</strong> Questi dati sono stati ottenuti direttamente dalle API OMI ufficiali
@@ -307,7 +426,34 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
                 </p>
               </div>
             )}
+
+            {omiFonteUrl && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <LinkIcon className="w-3.5 h-3.5" />
+                Fonte ufficiale:
+                <a
+                  href={omiFonteUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-700 hover:underline"
+                >
+                  Agenzia delle Entrate - OMI
+                </a>
+              </p>
+            )}
           </CardContent>
+        </Card>
+      ) : (
+        <Card className="border-blue-100 bg-blue-50/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Building2 className="w-5 h-5 text-blue-600" />
+              Dati OMI non disponibili
+            </CardTitle>
+            <CardDescription>
+              Per alcune zone l&apos;Osservatorio del Mercato Immobiliare non fornisce dati aggiornati. Prova a specificare una zona OMI differente o verifica i dati inseriti.
+            </CardDescription>
+          </CardHeader>
         </Card>
       )}
 
