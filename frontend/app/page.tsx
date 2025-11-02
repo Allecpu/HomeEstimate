@@ -21,6 +21,16 @@ type WizardData = Partial<PropertyFormData> & {
   comparables?: number;
   marketTrend?: string;
   photoCondition?: PhotoConditionResult;
+  photoStorageId?: string;
+  photoStorageCount?: number;
+};
+
+type WizardPropertyData = PropertyFormData & {
+  lat?: number;
+  lng?: number;
+  photoCondition?: PhotoConditionResult;
+  photoStorageId?: string;
+  photoStorageCount?: number;
 };
 
 const WIZARD_STEPS = [
@@ -138,7 +148,7 @@ function HomeContent() {
             <Step3VerifyLocation
               onNext={handleStep3Complete}
               onBack={handleBack}
-              propertyData={wizardData as PropertyFormData & { lat?: number; lng?: number; photoCondition?: PhotoConditionResult }}
+              propertyData={wizardData as WizardPropertyData}
             />
           )}
 
@@ -146,14 +156,14 @@ function HomeContent() {
             <Step4Calculation
               onNext={handleStep4Complete}
               onBack={handleBack}
-              propertyData={wizardData as PropertyFormData & { lat?: number; lng?: number; photoCondition?: PhotoConditionResult }}
+              propertyData={wizardData as WizardPropertyData}
             />
           )}
 
           {currentStep === 5 && wizardData.estimatedValue && (
             <Step5Report
               onBack={handleBack}
-              propertyData={wizardData as PropertyFormData & { lat?: number; lng?: number; photoCondition?: PhotoConditionResult }}
+              propertyData={wizardData as WizardPropertyData}
               estimationData={{
                 estimatedValue: wizardData.estimatedValue,
                 pricePerSqm: wizardData.pricePerSqm || 0,

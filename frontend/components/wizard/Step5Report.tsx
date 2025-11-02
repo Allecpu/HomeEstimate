@@ -11,7 +11,13 @@ import type { PhotoConditionLabel, PhotoConditionResult } from '@/lib/photo-anal
 
 interface Step5Props {
   onBack: () => void;
-  propertyData: PropertyFormData & { lat?: number; lng?: number; photoCondition?: PhotoConditionResult };
+  propertyData: PropertyFormData & {
+    lat?: number;
+    lng?: number;
+    photoCondition?: PhotoConditionResult;
+    photoStorageId?: string;
+    photoStorageCount?: number;
+  };
   estimationData: {
     estimatedValue: number;
     pricePerSqm: number;
@@ -87,6 +93,9 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
     };
   }, [rentalParams]);
 
+  const photoStorageId = propertyData.photoStorageId;
+  const photoStorageCount = propertyData.photoStorageCount ?? 0;
+  const hasPhotoArchive = Boolean(photoStorageId) && photoStorageCount > 0;
   const photoCondition = propertyData.photoCondition;
   const photoConditionScore = photoCondition ? Math.round(photoCondition.score) : 0;
   const photoConditionConfidence = photoCondition ? Math.round(photoCondition.confidence * 100) : 0;
@@ -139,10 +148,20 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
             Stato dell&apos;immobile dalle foto
           </CardTitle>
           <CardDescription>
-            Risultato dell&apos;analisi visiva automatica eseguita dall&apos;estensione.
+            Risultato dell&apos;analisi visiva basata sulle foto archiviate con l&apos;estensione.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {hasPhotoArchive && (
+            <p className="text-xs text-muted-foreground">
+              Foto archiviate: {photoStorageCount}
+              {photoStorageId ? (
+                <>
+                  {' '} - ID archivio: <span className="font-mono text-[11px]">{photoStorageId}</span>
+                </>
+              ) : null}
+            </p>
+          )}
           {photoCondition ? (
             <>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -153,7 +172,7 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Punteggio qualità</p>
+                  <p className="text-sm text-muted-foreground">Punteggio qualita</p>
                   <p className="text-2xl font-semibold">{photoConditionScore}</p>
                   <p className="text-xs text-muted-foreground">Scala 0-100</p>
                 </div>
@@ -176,7 +195,7 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
                       <div key={`${item.url}-${index}`} className="rounded-md border border-gray-200 p-3">
                         <p className="text-sm font-medium text-gray-800">{item.summary}</p>
                         {item.issues && (
-                          <p className="mt-1 text-xs text-red-600">Criticità: {item.issues}</p>
+                          <p className="mt-1 text-xs text-red-600">Criticita: {item.issues}</p>
                         )}
                       </div>
                     ))}
@@ -186,8 +205,9 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
             </>
           ) : (
             <p className="text-sm text-gray-600">
-              Nessuna analisi foto disponibile. Torna all&apos;estensione e usa il pulsante&nbsp;
-              <span className="font-medium">Analizza Foto (AI)</span> per ottenere la valutazione automatica.
+              {hasPhotoArchive
+                ? "Foto archiviate disponibili ma analisi non ancora eseguita. Torna allo Step 2 e clicca il pulsante Avvia analisi AI."
+                : "Per ottenere la valutazione automatica scarica prima le foto con l'estensione e poi avvia l'analisi dallo Step 2."}
             </p>
           )}
         </CardContent>
@@ -204,15 +224,15 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <p className="text-sm text-gray-600 mb-1">Prezzo medio al m²</p>
+              <p className="text-sm text-gray-600 mb-1">Prezzo medio al mÃ‚Â²</p>
               <p className="text-2xl font-bold text-blue-900">
-                {formatCurrency(avgPricePerSqm)} / m²
+                {formatCurrency(avgPricePerSqm)} / mÃ‚Â²
               </p>
             </div>
             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
               <p className="text-sm text-gray-600 mb-1">Fascia alta (top) della zona</p>
               <p className="text-2xl font-bold text-green-900">
-                {formatCurrency(topPricePerSqm)} / m²
+                {formatCurrency(topPricePerSqm)} / mÃ‚Â²
               </p>
             </div>
           </div>
@@ -231,16 +251,16 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <p className="text-sm text-gray-600 mb-1">Costo base ristrutturazione</p>
-              <p className="text-lg font-semibold">minimo {formatCurrency(minRenovationCostPerSqm)} / m²</p>
+              <p className="text-lg font-semibold">minimo {formatCurrency(minRenovationCostPerSqm)} / mÃ‚Â²</p>
             </div>
             <div>
               <p className="text-sm text-gray-600 mb-1">Superficie immobile</p>
-              <p className="text-lg font-semibold">{propertyData.surface} m²</p>
+              <p className="text-lg font-semibold">{propertyData.surface} mÃ‚Â²</p>
             </div>
           </div>
           <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
             <p className="text-sm text-gray-600 mb-2">
-              <strong>Formula:</strong> Valore ristrutturazione = max({renovationCostPerSqm}, 500) × {propertyData.surface}
+              <strong>Formula:</strong> Valore ristrutturazione = max({renovationCostPerSqm}, 500) Ãƒâ€” {propertyData.surface}
             </p>
             <p className="text-xl font-bold text-purple-900">
               Costo totale stimato: {formatCurrency(totalRenovationCost)}
@@ -266,7 +286,7 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
             <h3 className="font-semibold text-gray-900 mb-4">Parametri Modificabili</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="propertyValue">Valore immobile (€)</Label>
+                <Label htmlFor="propertyValue">Valore immobile (Ã¢â€šÂ¬)</Label>
                 <Input
                   id="propertyValue"
                   type="number"
@@ -275,7 +295,7 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="annualCosts">Tasse + costi annui fissi (€)</Label>
+                <Label htmlFor="annualCosts">Tasse + costi annui fissi (Ã¢â€šÂ¬)</Label>
                 <Input
                   id="annualCosts"
                   type="number"
@@ -284,7 +304,7 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="monthlyRent">Canone mensile 4+4 (€)</Label>
+                <Label htmlFor="monthlyRent">Canone mensile 4+4 (Ã¢â€šÂ¬)</Label>
                 <Input
                   id="monthlyRent"
                   type="number"
@@ -293,7 +313,7 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="nightlyPrice">Prezzo per notte (€)</Label>
+                <Label htmlFor="nightlyPrice">Prezzo per notte (Ã¢â€šÂ¬)</Label>
                 <Input
                   id="nightlyPrice"
                   type="number"
@@ -325,7 +345,7 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
               </div>
             </div>
             <p className="text-xs text-gray-500 mt-3">
-              💡 Suggerimento: imposta i costi annui per IMU/TASI, assicurazione, condominio, manutenzioni, gestione
+              Ã°Å¸â€™Â¡ Suggerimento: imposta i costi annui per IMU/TASI, assicurazione, condominio, manutenzioni, gestione
             </p>
           </div>
 
@@ -343,7 +363,7 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
                     {formatCurrency(longTermCalculations.annualRevenue)}
                   </p>
                   <p className="text-xs text-gray-500">
-                    {formatCurrency(rentalParams.monthlyRent)} × 12
+                    {formatCurrency(rentalParams.monthlyRent)} Ãƒâ€” 12
                   </p>
                 </div>
                 <div>
@@ -352,7 +372,7 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
                     {formatCurrency(longTermCalculations.netIncome)}
                   </p>
                   <p className="text-xs text-gray-500">
-                    {formatCurrency(longTermCalculations.annualRevenue)} − {formatCurrency(rentalParams.annualCosts)}
+                    {formatCurrency(longTermCalculations.annualRevenue)} Ã¢Ë†â€™ {formatCurrency(rentalParams.annualCosts)}
                   </p>
                 </div>
               </div>
@@ -379,7 +399,7 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
                     {shortTermCalculations.occupiedNights}
                   </p>
                   <p className="text-xs text-gray-500">
-                    365 × {rentalParams.occupancyRate}%
+                    365 Ãƒâ€” {rentalParams.occupancyRate}%
                   </p>
                 </div>
                 <div>
@@ -388,7 +408,7 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
                     {formatCurrency(shortTermCalculations.annualRevenue)}
                   </p>
                   <p className="text-xs text-gray-500">
-                    {formatCurrency(rentalParams.nightlyPrice)} × {shortTermCalculations.occupiedNights}
+                    {formatCurrency(rentalParams.nightlyPrice)} Ãƒâ€” {shortTermCalculations.occupiedNights}
                   </p>
                 </div>
                 <div>
@@ -407,7 +427,7 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
                   {formatCurrency(shortTermCalculations.netIncome)}
                 </p>
                 <p className="text-xs text-gray-500">
-                  {formatCurrency(shortTermCalculations.annualRevenue)} − {formatCurrency(shortTermCalculations.commissions)} − {formatCurrency(rentalParams.annualCosts)}
+                  {formatCurrency(shortTermCalculations.annualRevenue)} Ã¢Ë†â€™ {formatCurrency(shortTermCalculations.commissions)} Ã¢Ë†â€™ {formatCurrency(rentalParams.annualCosts)}
                 </p>
               </div>
               <div className="bg-green-100 rounded p-3">
@@ -468,7 +488,7 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
               </table>
             </div>
             <p className="text-xs text-gray-500 mt-3">
-              💡 Modifica <strong>occupazione breve</strong> per simulare stagionalità.
+              Ã°Å¸â€™Â¡ Modifica <strong>occupazione breve</strong> per simulare stagionalitÃƒÂ .
               Aumenta o riduci <strong>commissioni</strong> per gestione autonoma o full service.
             </p>
           </div>
@@ -478,7 +498,7 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
       {/* Disclaimer */}
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
         <p className="text-sm text-yellow-800">
-          <strong>Nota:</strong> Questa è una stima indicativa basata sui dati forniti e sull&apos;analisi
+          <strong>Nota:</strong> Questa ÃƒÂ¨ una stima indicativa basata sui dati forniti e sull&apos;analisi
           del mercato locale. Per una valutazione ufficiale, si consiglia di consultare un professionista
           del settore immobiliare.
         </p>

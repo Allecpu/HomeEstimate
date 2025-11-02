@@ -128,6 +128,15 @@ const FIELD_MAP = [
     label: 'Foto',
     formatter: (value) => Array.isArray(value) ? `${value.length} elemento/i` : value
   },
+  {
+    key: 'photoStorageCount',
+    label: 'Foto salvate',
+    formatter: (value) => typeof value === 'number' ? `${value} file` : value
+  },
+  {
+    key: 'photoStorageId',
+    label: 'Archivio foto',
+  },
   { key: 'url', label: 'URL' },
   { key: 'source', label: 'Fonte' }
 ];
@@ -345,23 +354,23 @@ async function copyToClipboard() {
   }
 }
 
-// Analyze photos with AI
+// Download foto e invio al backend per analisi successiva
 async function analyzePhotos() {
-  if (!extractedData || !extractedData.photos || extractedData.photos.length === 0) {
-    showError('Nessuna foto da analizzare');
+  if (!extractedData || !Array.isArray(extractedData.photos) || extractedData.photos.length === 0) {
+    showError('Nessuna foto da scaricare');
     return;
   }
 
-  // Change button text to show loading
   const originalText = analyzePhotosBtn.textContent;
-  analyzePhotosBtn.textContent = '⏳ Analisi in corso...';
+  analyzePhotosBtn.textContent = '⏳ Download in corso...';
   analyzePhotosBtn.disabled = true;
 
   try {
-    // Get current tab
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab || !tab.id) {
+      throw new Error('Nessuna tab attiva trovata');
+    }
 
-    // Request content script to download photos as base64
     console.log('Requesting photo download for', extractedData.photos.length, 'photos');
     let downloadResponse;
 
@@ -386,82 +395,61 @@ async function analyzePhotos() {
       }
     }
 
-    let analysis;
     const base64Photos = downloadResponse?.success ? downloadResponse.photos : null;
-
-    const refererUrl = typeof extractedData.url === 'string' ? extractedData.url : undefined;
+    const refererUrl = typeof extractedData.url === 'string' ? extractedData.url : tab.url;
     const listingId = deriveListingId(refererUrl);
 
-    if (Array.isArray(base64Photos) && base64Photos.length > 0) {
-      console.log('Downloaded', base64Photos.length, 'photos as base64');
-
-      const base64Response = await fetch('http://localhost:8000/api/analysis/photo-condition-base64', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          photos: base64Photos,
-          listing_id: listingId || refererUrl,
-          locale: 'it'
-        })
-      });
-
-      if (!base64Response.ok) {
-        const errorData = await base64Response.json();
-        throw new Error(errorData.detail || 'Errore durante l\'analisi foto');
-      }
-
-      analysis = await base64Response.json();
-      console.log('Photo analysis result (base64):', analysis);
-    } else {
-      console.warn('Base64 download failed, falling back to backend download');
-
-      const fallbackResponse = await fetch('http://localhost:8000/api/analysis/photo-condition-with-download', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          photos: extractedData.photos,
-          listing_id: listingId,
-          referer: refererUrl,
-          locale: 'it'
-        })
-      });
-
-      if (!fallbackResponse.ok) {
-        const errorData = await fallbackResponse.json();
-        throw new Error(errorData.detail || 'Errore durante l\'analisi foto (download backend)');
-      }
-
-      analysis = await fallbackResponse.json();
-      console.log('Photo analysis result (backend download):', analysis);
+    if (!Array.isArray(base64Photos) || base64Photos.length === 0) {
+      throw new Error('Impossibile scaricare le foto. Apri la galleria dell\\'annuncio e riprova.');
     }
 
-    // Add analysis result to extracted data
-    extractedData.photoCondition = analysis;
-    extractedData.state = analysis.label;
+    console.log('Downloaded', base64Photos.length, 'photos as base64');
 
-    // Show success message
-    analyzePhotosBtn.textContent = '✓ Analisi completata!';
+    const uploadResponse = await fetch('http://localhost:8000/api/analysis/photo-storage/upload-base64', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        photos: base64Photos,
+        listing_id: listingId || refererUrl,
+      })
+    });
+
+    if (!uploadResponse.ok) {
+      let errorMessage = 'Errore durante il salvataggio delle foto';
+      try {
+        const errorData = await uploadResponse.json();
+        errorMessage = errorData.detail || errorMessage;
+      } catch (parseError) {
+        console.warn('Unable to parse photo storage error response', parseError);
+      }
+      throw new Error(errorMessage);
+    }
+
+    const uploadResult = await uploadResponse.json();
+    console.log('Photo storage result:', uploadResult);
+
+    extractedData.photoStorageId = uploadResult.listing_id;
+    extractedData.photoStorageCount = uploadResult.saved;
+    if (extractedData.photoCondition) {
+      delete extractedData.photoCondition;
+    }
+
+    chrome.storage.local.set({ lastExtractedData: extractedData });
+
+    analyzePhotosBtn.textContent = '✔️ Foto salvate!';
     setTimeout(() => {
       analyzePhotosBtn.textContent = originalText;
       analyzePhotosBtn.disabled = false;
       showSuccess(extractedData);
     }, 2000);
-
   } catch (error) {
-    console.error('Photo analysis error:', error);
+    console.error('Photo download error:', error);
     analyzePhotosBtn.textContent = originalText;
     analyzePhotosBtn.disabled = false;
 
-    // Show specific error message
-    if (error.message.includes('429')) {
-      showError('Rate limit OpenAI superato. Attendi qualche minuto e riprova.');
-    } else {
-      showError(error.message || 'Errore durante l\'analisi delle foto');
-    }
+    showError(error?.message || 'Errore durante il salvataggio delle foto');
   }
 }
 

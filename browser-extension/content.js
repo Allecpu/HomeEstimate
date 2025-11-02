@@ -66,6 +66,177 @@ function extractEnergyClassFromText(text) {
   return fallback ? fallback[1].toUpperCase() : null;
 }
 
+function addPhotoUrl(photosSet, rawUrl) {
+  if (!rawUrl) return;
+  let url = String(rawUrl).trim();
+  if (!url || url.startsWith('data:')) return;
+
+  const lowered = url.toLowerCase();
+  if (lowered.includes('logo') || lowered.includes('placeholder')) return;
+
+  if (url.startsWith('//')) {
+    url = window.location.protocol + url;
+  } else if (url.startsWith('/')) {
+    try {
+      url = new URL(url, window.location.origin).href;
+    } catch {
+      return;
+    }
+  } else if (!/^https?:/i.test(url)) {
+    return;
+  }
+
+  photosSet.add(url);
+}
+
+function extractPhotoUrlsFromJson(value, photosSet, visited = new WeakSet()) {
+  if (value === null || value === undefined) return;
+
+  if (typeof value === 'string') {
+    addPhotoUrl(photosSet, value);
+    return;
+  }
+
+  if (typeof value !== 'object') return;
+  if (visited.has(value)) return;
+  visited.add(value);
+
+  if (Array.isArray(value)) {
+    value.forEach(item => extractPhotoUrlsFromJson(item, photosSet, visited));
+    return;
+  }
+
+  const directKeys = ['image', 'images', 'photos', 'photo', 'contentUrl', 'url', 'thumbnail', 'thumbnailUrl', 'mainImage'];
+  for (const key of directKeys) {
+    try {
+      if (key in value) {
+        extractPhotoUrlsFromJson(value[key], photosSet, visited);
+      }
+    } catch (err) {
+      console.warn('HomeEstimate: unable to inspect photo key', key, err);
+    }
+  }
+
+  let keys;
+  try {
+    keys = Object.keys(value);
+  } catch (err) {
+    return;
+  }
+
+  keys.forEach(key => {
+    if (!directKeys.includes(key)) {
+      try {
+        extractPhotoUrlsFromJson(value[key], photosSet, visited);
+      } catch (err) {
+        console.warn('HomeEstimate: unable to inspect nested key', key, err);
+      }
+    }
+  });
+}
+
+function collectIdealistaDomPhotoCandidates() {
+  const photosSet = new Set();
+  const selectors = [
+    'img.detail-image',
+    '[class*="gallery"] img',
+    '.detail-multimedia img',
+    'picture img',
+    'img[data-src]',
+    'img[data-lazy]',
+    'img[data-srcset]'
+  ];
+
+  document.querySelectorAll(selectors.join(',')).forEach(img => {
+    const candidates = [
+      img.currentSrc,
+      img.src,
+      img.getAttribute('data-src'),
+      img.getAttribute('data-original'),
+      img.getAttribute('data-lazy'),
+      img.getAttribute('data-srcset')
+    ].filter(Boolean);
+
+    candidates.forEach(candidate => {
+      if (candidate.includes(',')) {
+        candidate
+          .split(',')
+          .map(part => part.trim().split(' ')[0])
+          .forEach(url => addPhotoUrl(photosSet, url));
+      } else {
+        addPhotoUrl(photosSet, candidate);
+      }
+    });
+  });
+
+  return photosSet;
+}
+
+function extractIdealistaPhotos() {
+  const photosSet = new Set();
+
+  try {
+    const parseJsonAttribute = attrValue => {
+      if (!attrValue) return;
+      try {
+        const parsed = JSON.parse(attrValue);
+        extractPhotoUrlsFromJson(parsed, photosSet);
+      } catch (_) {
+        // Ignore malformed JSON payloads
+      }
+    };
+
+    document.querySelectorAll('[data-urls],[data-gallery],[data-gallery-images],[data-images]').forEach(element => {
+      parseJsonAttribute(element.getAttribute('data-urls'));
+      parseJsonAttribute(element.getAttribute('data-gallery'));
+      parseJsonAttribute(element.getAttribute('data-gallery-images'));
+      parseJsonAttribute(element.getAttribute('data-images'));
+    });
+
+    document.querySelectorAll('script[type="application/ld+json"]').forEach(script => {
+      const text = script.textContent;
+      if (!text) return;
+      try {
+        extractPhotoUrlsFromJson(JSON.parse(text), photosSet);
+      } catch (_) {
+        // Some ld+json blocks may contain multiple JSON objects; try to parse line by line
+        text
+          .split(/\n{2,}/)
+          .map(chunk => chunk.trim())
+          .filter(chunk => chunk.startsWith('{') || chunk.startsWith('['))
+          .forEach(chunk => {
+            try {
+              extractPhotoUrlsFromJson(JSON.parse(chunk), photosSet);
+            } catch (err) {
+              console.warn('HomeEstimate: failed to parse JSON-LD chunk for photos', err);
+            }
+          });
+      }
+    });
+
+    const potentialState = window.__INITIAL_STATE__ || window.__state || window.__DATA__;
+    if (potentialState) {
+      try {
+        extractPhotoUrlsFromJson(potentialState, photosSet);
+      } catch (err) {
+        console.warn('HomeEstimate: failed to parse initial state photos', err);
+      }
+    }
+
+    const domCandidates = collectIdealistaDomPhotoCandidates();
+    domCandidates.forEach(url => photosSet.add(url));
+  } catch (err) {
+    console.warn('HomeEstimate: failed to gather Idealista photos via structured data', err);
+  }
+
+  if (photosSet.size === 0) {
+    const fallback = collectIdealistaDomPhotoCandidates();
+    fallback.forEach(url => photosSet.add(url));
+  }
+
+  return Array.from(photosSet);
+}
+
 // Extract data from Idealista
 function extractIdealista() {
   const data = {
@@ -421,15 +592,8 @@ function extractIdealista() {
   if (descElem) data.description = descElem.textContent.trim();
 
   // Photos
-  const photos = [];
-  const imgElements = document.querySelectorAll('img.detail-image, [class*="gallery"] img, .detail-multimedia img');
-  imgElements.forEach(img => {
-    const src = img.src || img.dataset.src;
-    if (src && !src.includes('logo') && !photos.includes(src)) {
-      photos.push(src);
-    }
-  });
-  data.photos = photos.slice(0, 10); // Limit to 10 photos
+  const photos = extractIdealistaPhotos();
+  data.photos = photos;
 
   return data;
 }
@@ -717,10 +881,12 @@ function extractPropertyData() {
 async function downloadPhotosAsBase64(photoUrls) {
   const base64Photos = [];
 
-  for (let i = 0; i < Math.min(photoUrls.length, 8); i++) {
-    const url = photoUrls[i];
+  const uniqueUrls = Array.from(new Set((photoUrls || []).filter(Boolean)));
+
+  for (let i = 0; i < uniqueUrls.length; i++) {
+    const url = uniqueUrls[i];
     try {
-      console.log(`HomeEstimate: Downloading photo ${i + 1}/${photoUrls.length}: ${url}`);
+      console.log(`HomeEstimate: Downloading photo ${i + 1}/${uniqueUrls.length}: ${url}`);
 
       const response = await fetch(url);
       if (!response.ok) {
@@ -783,7 +949,3 @@ window.addEventListener('load', () => {
     }
   }, 2000);
 });
-
-
-
-

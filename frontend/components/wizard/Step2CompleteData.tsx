@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, Controller, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AlertCircle, Camera, CheckCircle2, Home } from 'lucide-react';
+import { AlertCircle, Camera, CheckCircle2, Home, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { propertySchema, type PropertyFormData, getMissingFields, calculateDataCompleteness } from '@/lib/validation';
 import { Progress } from '@/components/ui/progress';
 import type { PhotoConditionLabel, PhotoConditionResult } from '@/lib/photo-analysis';
+import { analyzePhotoConditionFromStorage } from '@/lib/photo-analysis';
 
 const PHOTO_CONDITION_LABELS: Record<PhotoConditionLabel, string> = {
   da_ristrutturare: 'Da ristrutturare',
@@ -23,9 +24,17 @@ const PHOTO_CONDITION_LABELS: Record<PhotoConditionLabel, string> = {
 };
 
 interface Step2Props {
-  onNext: (data: PropertyFormData) => void;
+  onNext: (data: PropertyFormData & {
+    photoCondition?: PhotoConditionResult;
+    photoStorageId?: string;
+    photoStorageCount?: number;
+  }) => void;
   onBack: () => void;
-  initialData?: Partial<PropertyFormData> & { photoCondition?: PhotoConditionResult };
+  initialData?: Partial<PropertyFormData> & {
+    photoCondition?: PhotoConditionResult;
+    photoStorageId?: string;
+    photoStorageCount?: number;
+  };
 }
 
 export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
@@ -112,10 +121,49 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
     return Number.isFinite(floored) ? floored : undefined;
   };
 
-  const photoCondition = initialData?.photoCondition;
-  const conditionScore = photoCondition ? Math.round(photoCondition.score) : 0;
-  const conditionConfidence = photoCondition ? Math.round(photoCondition.confidence * 100) : 0;
-  const photoHighlights = photoCondition?.per_photo?.slice(0, 3) ?? [];
+  const [photoAnalysis, setPhotoAnalysis] = useState<PhotoConditionResult | undefined>(initialData?.photoCondition);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPhotoAnalysis(initialData?.photoCondition);
+    setAnalysisError(null);
+  }, [initialData?.photoCondition]);
+
+  const conditionScore = photoAnalysis ? Math.round(photoAnalysis.score) : 0;
+  const conditionConfidence = photoAnalysis ? Math.round(photoAnalysis.confidence * 100) : 0;
+  const photoHighlights = photoAnalysis?.per_photo?.slice(0, 3) ?? [];
+
+  const photoStorageId = initialData?.photoStorageId;
+  const photoStorageCount = initialData?.photoStorageCount ?? 0;
+  const hasPhotoArchive = Boolean(photoStorageId) && photoStorageCount > 0;
+
+  const handleAnalyzePhotos = async () => {
+    if (!photoStorageId) {
+      setAnalysisError('Nessuna foto salvata dall\'estensione. Usa l\'estensione per scaricarle prima.');
+      return;
+    }
+
+    setAnalysisLoading(true);
+    setAnalysisError(null);
+
+    try {
+      const result = await analyzePhotoConditionFromStorage(photoStorageId, 'it');
+      setPhotoAnalysis(result);
+
+      const currentState = getValues('state');
+      if (!currentState) {
+        setValue('state', result.label);
+      }
+    } catch (error) {
+      console.error('Photo analysis from storage failed', error);
+      const message =
+        error instanceof Error ? error.message : 'Errore durante l\'analisi delle foto';
+      setAnalysisError(message);
+    } finally {
+      setAnalysisLoading(false);
+    }
+  };
 
   const processedData = useMemo(() => {
     if (!initialData) {
@@ -379,8 +427,14 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
     return value !== undefined && value !== null && value !== '';
   });
 
-  const onSubmit = (data: PropertyFormData) => {
-    onNext(data);
+const onSubmit = (data: PropertyFormData) => {
+    const payload = {
+      ...data,
+      photoCondition: photoAnalysis,
+      ...(photoStorageId ? { photoStorageId, photoStorageCount } : {}),
+    };
+
+    onNext(payload);
   };
 
   return (
@@ -395,7 +449,7 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
                 Completa i Dati dell&apos;Immobile
               </CardTitle>
               <CardDescription>
-                I campi evidenziati sono obbligatori. Più dati fornisci, più accurata sarà la stima.
+                I campi evidenziati sono obbligatori. PiÃ¹ dati fornisci, piÃ¹ accurata sarÃ  la stima.
               </CardDescription>
             </div>
             <div className="text-right">
@@ -445,7 +499,7 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
 
             <div className="space-y-2">
               <Label htmlFor="city">
-                Città <span className="text-red-500">*</span>
+                CittÃ  <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="city"
@@ -460,7 +514,7 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
 
             <div className="space-y-2">
               <Label htmlFor="surface">
-                Superficie (m²) <span className="text-red-500">*</span>
+                Superficie (mÂ²) <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="surface"
@@ -478,7 +532,7 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="price">Prezzo Richiesto (€)</Label>
+              <Label htmlFor="price">Prezzo Richiesto (â‚¬)</Label>
               <Controller
                 name="price"
                 control={control}
@@ -499,7 +553,7 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="pricePerSqm">Prezzo al m² (€)</Label>
+              <Label htmlFor="pricePerSqm">Prezzo al mÂ² (â‚¬)</Label>
               <Input
                 id="pricePerSqm"
                 type="number"
@@ -510,7 +564,7 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="condoFeesMonthly">Spese condominiali (€/mese)</Label>
+              <Label htmlFor="condoFeesMonthly">Spese condominiali (â‚¬/mese)</Label>
               <Controller
                 name="condoFeesMonthly"
                 control={control}
@@ -613,7 +667,7 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="surfaceCommercial">Superficie commerciale (m²)</Label>
+              <Label htmlFor="surfaceCommercial">Superficie commerciale (mÂ²)</Label>
               <Input
                 id="surfaceCommercial"
                 type="text"
@@ -626,7 +680,7 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="surfaceUsable">Superficie calpestabile (m²)</Label>
+              <Label htmlFor="surfaceUsable">Superficie calpestabile (mÂ²)</Label>
               <Input
                 id="surfaceUsable"
                 type="text"
@@ -786,21 +840,58 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
               Analisi delle Foto
             </CardTitle>
             <CardDescription>
-              Risultato dell&apos;analisi visiva eseguita tramite l&apos;estensione browser.
+              Gestisci il download delle foto e avvia l'analisi visiva direttamente dal portale.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {photoCondition ? (
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div>
+                <p className="text-sm text-gray-500">Foto archiviate</p>
+                <p className="text-lg font-semibold text-gray-900">
+                  {hasPhotoArchive ? `${photoStorageCount} foto` : 'Nessuna foto salvata'}
+                </p>
+                {photoStorageId && (
+                  <p className="text-xs text-gray-500 break-all mt-1">
+                    ID archivio: {photoStorageId}
+                  </p>
+                )}
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleAnalyzePhotos}
+                disabled={!hasPhotoArchive || analysisLoading}
+                className="md:self-start"
+              >
+                {analysisLoading ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Analisi in corso...
+                  </span>
+                ) : (
+                  'Avvia analisi AI'
+                )}
+              </Button>
+            </div>
+
+            {analysisError && (
+              <div className="flex items-center gap-2 text-sm text-red-600">
+                <AlertCircle className="h-4 w-4" />
+                <span>{analysisError}</span>
+              </div>
+            )}
+
+            {photoAnalysis ? (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <p className="text-sm text-gray-500">Condizione stimata</p>
                     <p className="text-xl font-semibold text-gray-900">
-                      {PHOTO_CONDITION_LABELS[photoCondition.label] ?? photoCondition.label}
+                      {PHOTO_CONDITION_LABELS[photoAnalysis.label] ?? photoAnalysis.label}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">Punteggio qualità (0-100)</p>
+                    <p className="text-sm text-gray-500">Punteggio qualita (0-100)</p>
                     <div className="flex items-center gap-3">
                       <Progress value={conditionScore} className="w-full h-2" />
                       <span className="text-sm font-medium text-gray-700 min-w-[3ch] text-right">
@@ -819,7 +910,7 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
                 <div className="space-y-2">
                   <p className="text-sm text-gray-500">Sintesi</p>
                   <p className="text-sm leading-relaxed text-gray-700">
-                    {photoCondition.reasoning}
+                    {photoAnalysis.reasoning}
                   </p>
                 </div>
 
@@ -831,7 +922,7 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
                         <div key={`${item.url}-${index}`} className="rounded-md border border-gray-200 p-3">
                           <p className="text-sm font-medium text-gray-800">{item.summary}</p>
                           {item.issues && (
-                            <p className="mt-1 text-xs text-red-600">Criticità: {item.issues}</p>
+                            <p className="mt-1 text-xs text-red-600">Criticita: {item.issues}</p>
                           )}
                         </div>
                       ))}
@@ -841,8 +932,7 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
               </>
             ) : (
               <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
-                Nessuna analisi disponibile. Usa il pulsante <span className="font-medium">Analizza Foto (AI)</span> nell&apos;estensione per generare una valutazione automatica
-                dello stato dell&apos;immobile.
+                Usa il pulsante dell'estensione per scaricare le foto e poi avvia qui l'analisi AI per ottenere una valutazione automatica dello stato dell'immobile.
               </div>
             )}
           </CardContent>
@@ -970,7 +1060,7 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="energyPerformance">Prestazione energetica (kWh/m² anno)</Label>
+              <Label htmlFor="energyPerformance">Prestazione energetica (kWh/mÂ² anno)</Label>
               <Input
                 id="energyPerformance"
                 type="text"

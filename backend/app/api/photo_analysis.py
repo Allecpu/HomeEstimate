@@ -1,3 +1,5 @@
+import base64
+import binascii
 import hashlib
 import logging
 import re
@@ -33,6 +35,16 @@ class PhotoAnalysisWithDownloadRequest(BaseModel):
 class PhotoAnalysisBase64Request(BaseModel):
     photos: List[str]  # Base64 data URLs
     listing_id: Optional[str] = None
+    locale: Optional[str] = "it"
+
+
+class PhotoStorageUploadRequest(BaseModel):
+    photos: List[str]  # Base64 data URLs
+    listing_id: Optional[str] = None
+
+
+class PhotoAnalysisFromStorageRequest(BaseModel):
+    listing_id: str
     locale: Optional[str] = "it"
 
 
@@ -107,6 +119,72 @@ async def download_photos_for_analysis(photo_urls: List[str], listing_id: Option
                 continue
 
     return local_paths
+
+
+def _save_base64_photos(photo_data: List[str], listing_id: Optional[str] = None) -> tuple[str, List[str]]:
+    if not photo_data:
+        raise ValueError("Nessuna foto fornita.")
+
+    safe_listing_id = _build_storage_identifier(listing_id, photo_data)
+    photos_dir = Path("storage/photos") / safe_listing_id
+    photos_dir.mkdir(parents=True, exist_ok=True)
+
+    # Clean previous files to avoid stale photos
+    for existing in photos_dir.glob("photo_*.*"):
+        try:
+            existing.unlink()
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Unable to remove existing photo %s: %s", existing, exc)
+
+    mime_to_ext = {
+        "image/jpeg": "jpg",
+        "image/jpg": "jpg",
+        "image/png": "png",
+        "image/webp": "webp",
+        "image/gif": "gif",
+    }
+
+    saved_paths: List[str] = []
+
+    for idx, item in enumerate(photo_data):
+        if not item:
+            continue
+
+        if item.startswith("data:"):
+            header, _, encoded = item.partition(",")
+            mime_match = re.match(r"data:(.*?);base64", header, re.IGNORECASE)
+            mime_type = mime_match.group(1).lower() if mime_match else "image/jpeg"
+        else:
+            encoded = item
+            mime_type = "image/jpeg"
+
+        try:
+            binary = base64.b64decode(encoded, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            logger.warning("Failed to decode base64 photo #%s: %s", idx, exc)
+            continue
+
+        if len(binary) < 256:
+            logger.debug("Skipping photo #%s because decoded content seems invalid (size=%s bytes)", idx, len(binary))
+            continue
+
+        ext = mime_to_ext.get(mime_type, "jpg")
+        filename = photos_dir / f"photo_{idx:03d}.{ext}"
+
+        try:
+            with open(filename, "wb") as file:
+                file.write(binary)
+        except OSError as exc:  # noqa: BLE001
+            logger.warning("Unable to persist photo #%s to %s: %s", idx, filename, exc)
+            continue
+
+        saved_paths.append(str(filename))
+        logger.info("Stored base64 photo #%s in %s", idx + 1, filename)
+
+    if not saved_paths:
+        raise ValueError("Impossibile salvare le foto fornite.")
+
+    return safe_listing_id, saved_paths
 
 
 @router.post("/photo-condition", response_model=PhotoConditionResult)
@@ -216,6 +294,79 @@ async def evaluate_photo_condition_base64(request: PhotoAnalysisBase64Request) -
         raise HTTPException(
             status_code=500,
             detail=f"Errore durante l'analisi delle foto: {str(exc)}"
+        ) from exc
+
+    if result is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Analisi non disponibile. Verifica che OPENAI_API_KEY sia configurata.",
+        )
+
+    return result
+
+
+@router.post("/photo-storage/upload-base64")
+async def upload_photo_storage_base64(request: PhotoStorageUploadRequest) -> dict:
+    if not request.photos:
+        raise HTTPException(
+            status_code=400,
+            detail="Nessuna foto fornita.",
+        )
+
+    try:
+        listing_id, saved_paths = _save_base64_photos(request.photos, request.listing_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Unexpected error while saving base64 photos")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Errore durante il salvataggio delle foto: {str(exc)}",
+        ) from exc
+
+    return {
+        "listing_id": listing_id,
+        "saved": len(saved_paths),
+    }
+
+
+@router.post("/photo-condition-from-storage", response_model=PhotoConditionResult)
+async def evaluate_photo_condition_from_storage(request: PhotoAnalysisFromStorageRequest) -> PhotoConditionResult:
+    safe_listing_id = _build_storage_identifier(request.listing_id, [])
+    photos_dir = Path("storage/photos") / safe_listing_id
+
+    if not photos_dir.exists() or not photos_dir.is_dir():
+        raise HTTPException(
+            status_code=404,
+            detail="Nessuna foto trovata per questo annuncio.",
+        )
+
+    photo_paths = sorted(
+        str(path)
+        for path in photos_dir.iterdir()
+        if path.is_file()
+    )
+
+    if not photo_paths:
+        raise HTTPException(
+            status_code=400,
+            detail="Nessuna foto disponibile per l'analisi.",
+        )
+
+    try:
+        result = await analyze_photo_condition(
+            photo_paths,
+            locale=request.locale or "it",
+        )
+    except PhotoConditionServiceError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Unexpected error during photo analysis from storage")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Errore durante l'analisi delle foto archiviate: {str(exc)}"
         ) from exc
 
     if result is None:
