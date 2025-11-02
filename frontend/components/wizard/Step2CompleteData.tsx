@@ -25,6 +25,101 @@ const PHOTO_CONDITION_LABELS: Record<PhotoConditionLabel, string> = {
   ottimo: 'Ottimo',
 };
 
+type PropertyCategory = Exclude<PropertyFormData['propertyType'], undefined>;
+
+const PROPERTY_TYPE_PRIORITY: PropertyCategory[] = ['signorile', 'ufficio', 'negozio', 'economico', 'residenziale'];
+
+const RAW_PROPERTY_TYPE_KEYWORDS: Record<PropertyCategory, string[]> = {
+  residenziale: [
+    'appartamento',
+    'abitazione',
+    'casa',
+    'residenziale',
+    'monolocale',
+    'bilocale',
+    'trilocale',
+    'quadrilocale',
+    'mansarda',
+    'loft',
+    'villetta',
+  ],
+  signorile: [
+    'signorile',
+    'prestigio',
+    'prestigiosa',
+    'lusso',
+    'lussuosa',
+    'attico',
+    'penthouse',
+    'esclusivo',
+    'di rappresentanza',
+  ],
+  economico: [
+    'economico',
+    'popolare',
+    'sociale',
+    'investimento',
+    'occasione',
+  ],
+  ufficio: [
+    'ufficio',
+    'studio professionale',
+    'studio medico',
+    'studio dentistico',
+    'coworking',
+    'direzionale',
+  ],
+  negozio: [
+    'negozio',
+    'locale commerciale',
+    'attività commerciale',
+    'vetrina',
+    'showroom',
+    'bottega',
+    'shop',
+  ],
+};
+
+const sanitizeText = (value: string): string =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+const PROPERTY_TYPE_KEYWORDS: Record<PropertyCategory, string[]> = Object.fromEntries(
+  (Object.entries(RAW_PROPERTY_TYPE_KEYWORDS) as [PropertyCategory, string[]][]).map(([category, words]) => [
+    category,
+    words.map((word) => sanitizeText(word)),
+  ]),
+) as Record<PropertyCategory, string[]>;
+
+function guessPropertyTypeFromText(text: string): PropertyCategory | null {
+  if (!text) {
+    return null;
+  }
+
+  const normalized = sanitizeText(text);
+  let bestCategory: PropertyCategory | null = null;
+  let bestScore = 0;
+
+  for (const category of PROPERTY_TYPE_PRIORITY) {
+    const keywords = PROPERTY_TYPE_KEYWORDS[category];
+    let score = 0;
+    for (const keyword of keywords) {
+      if (keyword && normalized.includes(keyword)) {
+        score += 1;
+      }
+    }
+
+    if (score > 0 && (score > bestScore || !bestCategory)) {
+      bestCategory = category;
+      bestScore = score;
+    }
+  }
+
+  return bestCategory;
+}
+
 interface Step2Props {
   onNext: (data: PropertyFormData & {
     photoCondition?: PhotoConditionResult;
@@ -317,7 +412,7 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
     setValue,
     getValues,
     watch,
-    formState: { errors },
+    formState: { errors, dirtyFields },
   } = useForm<PropertyFormData>({
     resolver: zodResolver(propertySchema),
     defaultValues: processedData,
@@ -333,9 +428,16 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
 
   const lastAutoPricePerSqmSignatureRef = useRef<string | undefined>(undefined);
   const pricePerSqmManuallyEditedRef = useRef(false);
+  const autoPropertyTypeRef = useRef<PropertyCategory | null>(null);
 
   const watchedPrice = useWatch({ control, name: 'price' });
   const watchedSurface = useWatch({ control, name: 'surface' });
+  const watchedAddress = watch('address');
+  const watchedCity = watch('city');
+  const watchedDescription = watch('description');
+  const watchedTitle = watch('title');
+  const watchedPropertyType = watch('propertyType');
+  const propertyTypeDirty = Boolean((dirtyFields as { propertyType?: boolean }).propertyType);
 
   const pricePerSqmField = register('pricePerSqm', {
     valueAsNumber: true,
@@ -436,10 +538,40 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
     loadSavedAnalysis();
   }, [photoStorageId, photoAnalysis, getValues, setValue]);
 
+  useEffect(() => {
+    if (propertyTypeDirty) {
+      return;
+    }
+
+    const combinedText = `${watchedTitle ?? ''} ${watchedDescription ?? ''}`.trim();
+
+    if (!combinedText) {
+      autoPropertyTypeRef.current = null;
+      return;
+    }
+
+    const inferred = guessPropertyTypeFromText(combinedText);
+    if (!inferred) {
+      return;
+    }
+
+    const lastApplied = autoPropertyTypeRef.current;
+    const currentValue = watchedPropertyType ?? null;
+    const isDefaultValue = currentValue === 'residenziale';
+    const hasNoSelection = currentValue === null || currentValue === undefined || currentValue === '';
+    const previouslyApplied = lastApplied !== null && currentValue === lastApplied;
+    const shouldOverrideDefault = isDefaultValue && inferred !== 'residenziale';
+    const shouldApply = (hasNoSelection || previouslyApplied || shouldOverrideDefault) && currentValue !== inferred;
+
+    if (shouldApply) {
+      autoPropertyTypeRef.current = inferred;
+      setValue('propertyType', inferred, { shouldDirty: false, shouldTouch: false });
+    } else if (lastApplied !== inferred && (previouslyApplied || hasNoSelection)) {
+      autoPropertyTypeRef.current = inferred;
+    }
+  }, [watchedDescription, watchedTitle, watchedPropertyType, setValue, propertyTypeDirty]);
+
   // Auto-suggest OMI data based on address
-  const watchedAddress = watch('address');
-  const watchedCity = watch('city');
-  const watchedDescription = watch('description');
 
   useEffect(() => {
     // Solo se abbiamo indirizzo e città

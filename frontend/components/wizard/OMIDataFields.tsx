@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Info, Building2, MapPin, Loader2, Lightbulb } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -38,6 +38,10 @@ export function OMIDataFields({
   const [isLoadingZones, setIsLoadingZones] = useState(false);
   const [citySupported, setCitySupported] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const appliedSuggestionsRef = useRef<{ propertyType: string | null; zone: string | null }>({
+    propertyType: null,
+    zone: null,
+  });
 
   // Carica i tipi di immobile disponibili
   useEffect(() => {
@@ -95,6 +99,52 @@ export function OMIDataFields({
     const timeoutId = setTimeout(checkCityAndLoadZones, 500);
     return () => clearTimeout(timeoutId);
   }, [city]);
+
+  // Applica automaticamente il tipo di immobile suggerito se il campo è vuoto o contiene il precedente suggerimento
+  useEffect(() => {
+    if (!suggestedPropertyType) {
+      appliedSuggestionsRef.current.propertyType = null;
+      return;
+    }
+
+    const currentValue = propertyTypeOMI ?? '';
+    const hasSelection = currentValue !== '';
+    const isUsingAppliedSuggestion =
+      hasSelection && currentValue === appliedSuggestionsRef.current.propertyType;
+    const shouldApply =
+      (!hasSelection || isUsingAppliedSuggestion) &&
+      appliedSuggestionsRef.current.propertyType !== suggestedPropertyType;
+
+    if (shouldApply) {
+      appliedSuggestionsRef.current.propertyType = suggestedPropertyType;
+      onPropertyTypeChange(suggestedPropertyType);
+    }
+  }, [propertyTypeOMI, suggestedPropertyType, onPropertyTypeChange]);
+
+  // Applica automaticamente la zona OMI suggerita seguendo la stessa logica del tipo
+  useEffect(() => {
+    if (!suggestedZone || isLoadingZones) {
+      if (!suggestedZone) {
+        appliedSuggestionsRef.current.zone = null;
+      }
+      return;
+    }
+
+    const currentValue = zonaOMI ?? '';
+    const hasSelection = currentValue !== '';
+    const isUsingAppliedSuggestion =
+      hasSelection && currentValue === appliedSuggestionsRef.current.zone;
+    const zoneAvailable = zones.length === 0 || zones.includes(suggestedZone);
+    const shouldApply =
+      zoneAvailable &&
+      (!hasSelection || isUsingAppliedSuggestion) &&
+      appliedSuggestionsRef.current.zone !== suggestedZone;
+
+    if (shouldApply) {
+      appliedSuggestionsRef.current.zone = suggestedZone;
+      onZonaOMIChange(suggestedZone);
+    }
+  }, [zonaOMI, suggestedZone, zones, isLoadingZones, onZonaOMIChange]);
 
   // Se la città non è stata inserita
   if (!city || city.trim().length < 2) {
@@ -180,6 +230,11 @@ export function OMIDataFields({
                         Applica tipo: {propertyTypes.find(t => t.value === suggestedPropertyType)?.display_name || suggestedPropertyType}
                       </Button>
                     )}
+                    {suggestedPropertyType && propertyTypeOMI === suggestedPropertyType && (
+                      <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800">
+                        Tipo applicato: {propertyTypes.find(t => t.value === suggestedPropertyType)?.display_name || suggestedPropertyType}
+                      </span>
+                    )}
                     {suggestedZone && !zonaOMI && (
                       <Button
                         type="button"
@@ -190,6 +245,11 @@ export function OMIDataFields({
                       >
                         Applica zona: {suggestedZone}
                       </Button>
+                    )}
+                    {suggestedZone && zonaOMI === suggestedZone && (
+                      <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-800">
+                        Zona applicata: {suggestedZone}
+                      </span>
                     )}
                   </div>
                 </div>
