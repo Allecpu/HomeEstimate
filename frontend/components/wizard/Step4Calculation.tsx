@@ -15,6 +15,18 @@ interface Step4Props {
   propertyData: PropertyFormData & { lat?: number; lng?: number };
 }
 
+interface OMIQuotationRaw {
+  zona_omi: string;
+  property_type: string;
+  stato_conservazione?: string;
+  prezzo_acquisto_min?: number;
+  prezzo_acquisto_max?: number;
+  prezzo_acquisto_medio?: number;
+  prezzo_affitto_min?: number;
+  prezzo_affitto_max?: number;
+  prezzo_affitto_medio?: number;
+}
+
 interface EstimationResult {
   estimatedValue: number;
   pricePerSqm: number;
@@ -30,6 +42,12 @@ interface EstimationResult {
     semestre: string;
     stato_conservazione?: string;
     fonte: string;
+    property_type?: string;
+    prezzoAffittoMin?: number;
+    prezzoAffittoMax?: number;
+    prezzoAffittoMedio?: number;
+    fonteUrl?: string | null;
+    quotationsRaw?: OMIQuotationRaw[] | null;
   };
 }
 

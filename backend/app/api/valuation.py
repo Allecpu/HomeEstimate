@@ -1,12 +1,14 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from app.omi import get_omi_client, PropertyType, get_property_type
 
 router = APIRouter()
+
+OMI_FONTE_URL = "https://www.agenziaentrate.gov.it/portale/omi"
 
 
 def _normalize(text: Optional[str]) -> str:
@@ -197,6 +199,12 @@ class OMIData(BaseModel):
     semestre: str
     stato_conservazione: Optional[str] = None
     fonte: str = "OMI"  # Fonte dei dati
+    property_type: Optional[str] = None
+    prezzoAffittoMin: Optional[float] = None
+    prezzoAffittoMax: Optional[float] = None
+    prezzoAffittoMedio: Optional[float] = None
+    fonteUrl: Optional[str] = None
+    quotationsRaw: Optional[List[Dict[str, Any]]] = None
 
 
 class ValuationResponse(BaseModel):
@@ -232,6 +240,7 @@ async def evaluate_property(property_data: PropertyInput):
     omi_client = get_omi_client()
     omi_data_model = None
     price_per_sqm_omi = None
+    quotations_raw: List[Dict[str, Any]] = []
 
     try:
         # Determina il tipo di immobile OMI
@@ -251,6 +260,7 @@ async def evaluate_property(property_data: PropertyInput):
         if omi_response and omi_response.quotations:
             # Usa la prima quotazione disponibile (o quella del tipo specificato)
             quotation = omi_response.quotations[0]
+            quotations_raw = [q.dict(exclude_none=True) for q in omi_response.quotations]
 
             # Cerca la quotazione migliore per il tipo specificato
             if property_type_omi:
@@ -272,7 +282,13 @@ async def evaluate_property(property_data: PropertyInput):
                     valoreNormale=round(price_per_sqm_omi, 0),
                     semestre=f"{datetime.now().year}-S{1 if datetime.now().month <= 6 else 2}",
                     stato_conservazione=quotation.stato_conservazione,
-                    fonte="OMI - Dati reali"
+                    fonte="OMI - Dati reali",
+                    property_type=quotation.property_type,
+                    prezzoAffittoMin=quotation.prezzo_affitto_min,
+                    prezzoAffittoMax=quotation.prezzo_affitto_max,
+                    prezzoAffittoMedio=quotation.prezzo_affitto_medio,
+                    fonteUrl=OMI_FONTE_URL,
+                    quotationsRaw=quotations_raw or None,
                 )
 
     except Exception as e:
@@ -300,7 +316,8 @@ async def evaluate_property(property_data: PropertyInput):
                 valoreMax=round(omi_value_max, 0),
                 valoreNormale=round(price_per_sqm, 0),
                 semestre=f"{datetime.now().year}-S{1 if datetime.now().month <= 6 else 2}",
-                fonte="Algoritmo proprietario"
+                fonte="Algoritmo proprietario",
+                quotationsRaw=quotations_raw or None,
             )
 
     # Calcola il valore stimato

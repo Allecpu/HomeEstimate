@@ -218,17 +218,19 @@ export async function getPurchasePrice(params: {
   metri_quadri: number;
   tipo_immobile?: string;
   zona_omi?: string;
+  signal?: AbortSignal;
 }): Promise<PriceData> {
+  const { city, metri_quadri, tipo_immobile, zona_omi, signal } = params;
   const searchParams = new URLSearchParams({
-    city: params.city,
-    metri_quadri: params.metri_quadri.toString(),
+    city,
+    metri_quadri: metri_quadri.toString(),
   });
 
-  if (params.tipo_immobile) {
-    searchParams.append('tipo_immobile', params.tipo_immobile);
+  if (tipo_immobile) {
+    searchParams.append('tipo_immobile', tipo_immobile);
   }
-  if (params.zona_omi) {
-    searchParams.append('zona_omi', params.zona_omi);
+  if (zona_omi) {
+    searchParams.append('zona_omi', zona_omi);
   }
 
   const response = await fetch(
@@ -238,6 +240,7 @@ export async function getPurchasePrice(params: {
       headers: {
         'Content-Type': 'application/json',
       },
+      signal,
     }
   );
 
@@ -257,17 +260,19 @@ export async function getRentalPrice(params: {
   metri_quadri: number;
   tipo_immobile?: string;
   zona_omi?: string;
+  signal?: AbortSignal;
 }): Promise<PriceData> {
+  const { city, metri_quadri, tipo_immobile, zona_omi, signal } = params;
   const searchParams = new URLSearchParams({
-    city: params.city,
-    metri_quadri: params.metri_quadri.toString(),
+    city,
+    metri_quadri: metri_quadri.toString(),
   });
 
-  if (params.tipo_immobile) {
-    searchParams.append('tipo_immobile', params.tipo_immobile);
+  if (tipo_immobile) {
+    searchParams.append('tipo_immobile', tipo_immobile);
   }
-  if (params.zona_omi) {
-    searchParams.append('zona_omi', params.zona_omi);
+  if (zona_omi) {
+    searchParams.append('zona_omi', zona_omi);
   }
 
   const response = await fetch(
@@ -277,6 +282,7 @@ export async function getRentalPrice(params: {
       headers: {
         'Content-Type': 'application/json',
       },
+      signal,
     }
   );
 
