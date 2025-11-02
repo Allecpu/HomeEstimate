@@ -1,0 +1,38 @@
+{
+  "label": "da_ristrutturare",
+  "score": 30.0,
+  "confidence": 0.8,
+  "reasoning": "L'immobile presenta evidenti segni di degrado sulla facciata, con intonaco scrostato e finiture visibilmente usurate. Gli infissi sembrano datati e potrebbero necessitare di sostituzione. Non sono visibili impianti interni, il che rende difficile valutare lo stato degli impianti elettrici e idraulici. La qualità percepita è bassa a causa delle condizioni esterne.",
+  "per_photo": [
+    {
+      "url": "url_foto_1",
+      "summary": "Facciata principale con segni di degrado.",
+      "issues": "Intonaco scrostato e infissi datati."
+    },
+    {
+      "url": "url_foto_2",
+      "summary": "Vista della facciata con insegna.",
+      "issues": "Condizioni esterne non curate."
+    },
+    {
+      "url": "url_foto_3",
+      "summary": "Vista laterale dell'immobile.",
+      "issues": "Degrado visibile e mancanza di manutenzione."
+    },
+    {
+      "url": "url_foto_4",
+      "summary": "Dettaglio della facciata.",
+      "issues": "Finiture usurate e infissi in cattivo stato."
+    },
+    {
+      "url": "url_foto_5",
+      "summary": "Vista generale dell'immobile.",
+      "issues": "Condizioni esterne non curate."
+    },
+    {
+      "url": "url_foto_6",
+      "summary": "Altra angolazione della facciata.",
+      "issues": "Degrado visibile e mancanza di manutenzione."
+    }
+  ]
+}

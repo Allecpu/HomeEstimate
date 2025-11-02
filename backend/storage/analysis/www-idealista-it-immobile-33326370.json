@@ -1,0 +1,38 @@
+{
+  "label": "ottimo",
+  "score": 90.0,
+  "confidence": 0.9,
+  "reasoning": "L'immobile presenta finiture di alta qualità, con ampie vetrate che offrono una vista panoramica. Gli infissi sembrano in buono stato e l'area esterna è ben curata, con una piscina in ottime condizioni. Non sono visibili segni di usura o necessità di ristrutturazione.",
+  "per_photo": [
+    {
+      "url": "https://example.com/photo1.jpg",
+      "summary": "Vista esterna dell'immobile con piscina.",
+      "issues": null
+    },
+    {
+      "url": "https://example.com/photo2.jpg",
+      "summary": "Vista esterna dell'immobile con piscina.",
+      "issues": null
+    },
+    {
+      "url": "https://example.com/photo3.jpg",
+      "summary": "Interno con vista sul giardino.",
+      "issues": null
+    },
+    {
+      "url": "https://example.com/photo4.jpg",
+      "summary": "Dettaglio della piscina.",
+      "issues": null
+    },
+    {
+      "url": "https://example.com/photo5.jpg",
+      "summary": "Vista esterna dell'immobile con piscina.",
+      "issues": null
+    },
+    {
+      "url": "https://example.com/photo6.jpg",
+      "summary": "Interno con vista sul giardino.",
+      "issues": null
+    }
+  ]
+}

@@ -136,9 +136,9 @@ export function Step4Calculation({ onNext, onBack, propertyData }: Step4Props) {
   };
 
   const getTrendIcon = (trend: string) => {
-    if (trend === 'crescente') return '📈';
-    if (trend === 'decrescente') return '📉';
-    return '➡️';
+    if (trend === 'crescente') return '^';
+    if (trend === 'decrescente') return 'v';
+    return '->';
   };
 
   return (
@@ -161,7 +161,7 @@ export function Step4Calculation({ onNext, onBack, propertyData }: Step4Props) {
               <div className="flex-1">
                 <p className="text-sm text-gray-600">Immobile</p>
                 <p className="font-semibold text-gray-900">
-                  {propertyData.surface} m² • {propertyData.rooms} locali • {propertyData.bedrooms} camere
+                  {propertyData.surface} mq | {propertyData.rooms} locali | {propertyData.bedrooms} camere
                 </p>
               </div>
             </div>

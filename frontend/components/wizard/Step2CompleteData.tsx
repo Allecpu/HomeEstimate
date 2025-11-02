@@ -125,6 +125,7 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [loadingSavedAnalysis, setLoadingSavedAnalysis] = useState(false);
+  const attemptedSavedAnalysisId = useRef<string | null>(null);
 
   const photoStorageId = initialData?.photoStorageId;
   const photoStorageCount = initialData?.photoStorageCount ?? 0;
@@ -389,11 +390,23 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
 
   // Auto-load saved analysis when photoStorageId is available
   useEffect(() => {
+    if (!photoStorageId) {
+      attemptedSavedAnalysisId.current = null;
+    }
+  }, [photoStorageId]);
+
+  useEffect(() => {
     const loadSavedAnalysis = async () => {
       // Don't load if we already have an analysis or no storage ID
-      if (photoAnalysis || !photoStorageId || loadingSavedAnalysis) {
+      if (photoAnalysis || !photoStorageId) {
         return;
       }
+
+      if (attemptedSavedAnalysisId.current === photoStorageId) {
+        return;
+      }
+
+      attemptedSavedAnalysisId.current = photoStorageId;
 
       setLoadingSavedAnalysis(true);
       try {
@@ -417,7 +430,7 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
     };
 
     loadSavedAnalysis();
-  }, [photoStorageId, photoAnalysis, loadingSavedAnalysis, getValues, setValue]);
+  }, [photoStorageId, photoAnalysis, getValues, setValue]);
 
   const conditionScore = photoAnalysis ? Math.round(photoAnalysis.score) : 0;
   const conditionConfidence = photoAnalysis ? Math.round(photoAnalysis.confidence * 100) : 0;
