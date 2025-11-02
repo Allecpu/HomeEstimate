@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { PropertyFormData } from '@/lib/validation';
+import type { LeafletMouseEvent, Marker as LeafletMarker } from 'leaflet';
 
 // Import Leaflet dynamically to avoid SSR issues
 const MapContainer = dynamic(
@@ -42,6 +43,7 @@ export function Step3VerifyLocation({ onNext, onBack, propertyData }: Step3Props
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isConfirmed, setIsConfirmed] = useState(false);
+  const [hasUserSelected, setHasUserSelected] = useState(false);
 
   // Fix Leaflet icon issue with Next.js
   useEffect(() => {
@@ -92,6 +94,8 @@ export function Step3VerifyLocation({ onNext, onBack, propertyData }: Step3Props
             lat: parseFloat(location.lat),
             lng: parseFloat(location.lon),
           });
+          setHasUserSelected(false);
+          setIsConfirmed(false);
         } else {
           throw new Error('Indirizzo non trovato. Verifica che l\'indirizzo sia corretto.');
         }
@@ -144,6 +148,8 @@ export function Step3VerifyLocation({ onNext, onBack, propertyData }: Step3Props
             lat: parseFloat(location.lat),
             lng: parseFloat(location.lon),
           });
+          setHasUserSelected(false);
+          setIsConfirmed(false);
           setError(null);
         } else {
           throw new Error('Indirizzo non trovato');
@@ -208,12 +214,30 @@ export function Step3VerifyLocation({ onNext, onBack, propertyData }: Step3Props
                   zoom={16}
                   style={{ height: '100%', width: '100%' }}
                   scrollWheelZoom={true}
+                  onClick={(event: LeafletMouseEvent) => {
+                    const { lat, lng } = event.latlng;
+                    setCoordinates({ lat, lng });
+                    setHasUserSelected(true);
+                    setIsConfirmed(false);
+                  }}
                 >
                   <TileLayer
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                   />
-                  <Marker position={[coordinates.lat, coordinates.lng]}>
+                  <Marker
+                    position={[coordinates.lat, coordinates.lng]}
+                    draggable
+                    eventHandlers={{
+                      dragend: (event) => {
+                        const marker = event.target as LeafletMarker;
+                        const { lat, lng } = marker.getLatLng();
+                        setCoordinates({ lat, lng });
+                        setHasUserSelected(true);
+                        setIsConfirmed(false);
+                      },
+                    }}
+                  >
                     <Popup>
                       <div className="text-center">
                         <p className="font-semibold">{propertyData.address}</p>
@@ -232,7 +256,9 @@ export function Step3VerifyLocation({ onNext, onBack, propertyData }: Step3Props
                 <Alert className="bg-green-50 border-green-200">
                   <CheckCircle2 className="h-4 w-4 text-green-600" />
                   <AlertDescription className="ml-2 text-green-800">
-                    Posizione trovata! Verifica che il marker sulla mappa corrisponda all&apos;indirizzo corretto.
+                    {hasUserSelected
+                      ? 'Posizione selezionata! Conferma che la posizione sia corretta prima di procedere.'
+                      : 'Trascina il marker o clicca sulla mappa per selezionare con precisione la posizione.'}
                   </AlertDescription>
                 </Alert>
               )}
@@ -280,7 +306,7 @@ export function Step3VerifyLocation({ onNext, onBack, propertyData }: Step3Props
             type="button"
             onClick={handleConfirm}
             className="flex-1 bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition-all"
-            disabled={isLoading}
+            disabled={isLoading || !hasUserSelected}
           >
             {isConfirmed ? 'Confermato ✓' : 'Conferma Posizione'}
           </Button>
