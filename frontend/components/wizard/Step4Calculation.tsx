@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { PropertyFormData } from '@/lib/validation';
+import type { ComparableResult } from './types';
 
 interface Step4Props {
   onNext: (estimationData: Record<string, unknown>) => void;
@@ -31,7 +32,7 @@ interface EstimationResult {
   estimatedValue: number;
   pricePerSqm: number;
   confidence: number;
-  comparables: number;
+  comparables: ComparableResult[];
   marketTrend: string;
   omiData?: {
     comune: string;
@@ -116,11 +117,15 @@ export function Step4Calculation({ onNext, onBack, propertyData }: Step4Props) {
       const data = await response.json();
 
       // Set result with OMI data
+      const comparables: ComparableResult[] = Array.isArray(data.comparables)
+        ? data.comparables
+        : [];
+
       const estimationResult: EstimationResult = {
         estimatedValue: data.estimatedValue || 0,
         pricePerSqm: data.priceM2 || 0,
         confidence: data.confidenceScore || 0,
-        comparables: data.comparables?.length || 0,
+        comparables,
         marketTrend: data.marketPosition === 'in_linea' ? 'stabile' :
                      data.marketPosition === 'sopra_mercato' ? 'crescente' : 'decrescente',
         omiData: data.omiData || undefined,
@@ -311,7 +316,7 @@ export function Step4Calculation({ onNext, onBack, propertyData }: Step4Props) {
                     <div className="text-center space-y-1">
                       <p className="text-sm text-gray-600">Comparabili</p>
                       <p className="text-2xl font-bold text-gray-900">
-                        {result.comparables}
+                        {result.comparables.length}
                       </p>
                       <p className="text-xs text-gray-500">
                         Immobili analizzati

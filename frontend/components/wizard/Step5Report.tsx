@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { PropertyFormData } from '@/lib/validation';
 import type { PhotoConditionLabel, PhotoConditionResult } from '@/lib/photo-analysis';
+import type { ComparableResult } from './types';
 
 const OMI_DEFAULT_URL = 'https://www.agenziaentrate.gov.it/portale/omi';
 
@@ -25,7 +26,7 @@ interface Step5Props {
     estimatedValue: number;
     pricePerSqm: number;
     confidence: number;
-    comparables: number;
+    comparables: ComparableResult[];
     marketTrend: string;
     omiData?: OMIDataResult;
   };
@@ -133,6 +134,8 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
   const photoConditionScore = photoCondition ? Math.round(photoCondition.score) : 0;
   const photoConditionConfidence = photoCondition ? Math.round(photoCondition.confidence * 100) : 0;
   const photoConditionHighlights = photoCondition?.per_photo?.slice(0, 3) ?? [];
+  const comparables = estimationData.comparables ?? [];
+  const comparablesCount = comparables.length;
 
   const formatSentenceCase = (value: string) => {
     return value
@@ -202,6 +205,71 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
             Analisi dettagliata del valore immobiliare e simulazioni di rendimento
           </CardDescription>
         </CardHeader>
+      </Card>
+
+      {/* Comparables */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Home className="w-5 h-5" />
+            Immobili comparabili analizzati
+            <Badge variant="outline" className="text-xs font-semibold">
+              {comparablesCount} immobili
+            </Badge>
+          </CardTitle>
+          <CardDescription>
+            Lista degli immobili utilizzati per la stima con prezzi al metro quadro e distanza stimata.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {comparablesCount > 0 ? (
+            <div className="space-y-3">
+              {comparables.map(comparable => (
+                <div
+                  key={comparable.id}
+                  className="rounded-lg border border-gray-200 p-4 hover:border-blue-200 hover:shadow-sm transition"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <p className="text-sm text-gray-500">{comparable.id}</p>
+                      <p className="text-base font-semibold text-gray-900">{comparable.address}</p>
+                    </div>
+                    <Badge variant={comparable.includedInEstimate ? 'default' : 'secondary'}>
+                      {comparable.includedInEstimate ? 'Incluso nella stima' : 'Escluso'}
+                    </Badge>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                    <div>
+                      <p className="text-xs text-gray-500">Prezzo totale</p>
+                      <p className="font-semibold text-gray-900">{formatCurrency(comparable.price)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Prezzo al m²</p>
+                      <p className="font-semibold text-gray-900">{formatCurrency(comparable.priceM2)} / m²</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Superficie</p>
+                      <p className="font-semibold text-gray-900">{formatNumber(comparable.surface, 1)} m²</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Distanza</p>
+                      <p className="font-semibold text-gray-900">{formatNumber(comparable.distance, 0)} m</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 text-xs text-gray-500">
+                    Similarità stimata: <span className="font-semibold text-gray-800">{formatNumber(comparable.similarityScore, 1)}%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-600">
+              Nessun immobile comparabile disponibile. Il sistema non ha potuto individuare analoghi affidabili per questa stima.
+            </p>
+          )}
+        </CardContent>
       </Card>
 
       {/* Analisi Foto */}
@@ -732,7 +800,7 @@ export function Step5Report({ onBack, propertyData, estimationData }: Step5Props
               </table>
             </div>
             <p className="text-xs text-gray-500 mt-3">
-              Suggerimento: modifica l'occupazione breve per simulare la stagionalita. Aumenta o riduci le commissioni
+              Suggerimento: modifica l&apos;occupazione breve per simulare la stagionalita. Aumenta o riduci le commissioni
               per confrontare gestione autonoma e servizi full.
             </p>
           </div>

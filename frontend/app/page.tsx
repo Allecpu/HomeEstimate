@@ -10,6 +10,7 @@ import { Step4Calculation } from '@/components/wizard/Step4Calculation';
 import { Step5Report } from '@/components/wizard/Step5Report';
 import { PropertyFormData } from '@/lib/validation';
 import type { PhotoConditionResult } from '@/lib/photo-analysis';
+import type { ComparableResult } from '@/components/wizard/types';
 
 type WizardData = Partial<PropertyFormData> & {
   lat?: number;
@@ -18,7 +19,7 @@ type WizardData = Partial<PropertyFormData> & {
   estimatedValue?: number;
   pricePerSqm?: number;
   confidence?: number;
-  comparables?: number;
+  comparables?: ComparableResult[];
   marketTrend?: string;
   photoCondition?: PhotoConditionResult;
   photoStorageId?: string;
@@ -168,7 +169,7 @@ function HomeContent() {
                 estimatedValue: wizardData.estimatedValue,
                 pricePerSqm: wizardData.pricePerSqm || 0,
                 confidence: wizardData.confidence || 0,
-                comparables: wizardData.comparables || 0,
+                comparables: wizardData.comparables || [],
                 marketTrend: wizardData.marketTrend || 'stabile',
               }}
             />
