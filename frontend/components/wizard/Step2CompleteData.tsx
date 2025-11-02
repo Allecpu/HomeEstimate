@@ -11,12 +11,19 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { propertySchema, type PropertyFormData, getMissingFields, calculateDataCompleteness } from '@/lib/validation';
 import { Progress } from '@/components/ui/progress';
 import type { PhotoConditionLabel, PhotoConditionResult } from '@/lib/photo-analysis';
 import { analyzePhotoConditionFromStorage, getSavedAnalysis } from '@/lib/photo-analysis';
 import { OMIDataFields } from '@/components/wizard/OMIDataFields';
-import { getOMISuggestions, type OMISuggestion } from '@/lib/omi-api';
+import {
+  getOMISuggestions,
+  getPurchasePrice,
+  getRentalPrice,
+  type OMISuggestion,
+  type PriceData,
+} from '@/lib/omi-api';
 
 const PHOTO_CONDITION_LABELS: Record<PhotoConditionLabel, string> = {
   da_ristrutturare: 'Da ristrutturare',
@@ -134,6 +141,155 @@ interface Step2Props {
   };
 }
 
+type OMIQuoteState = {
+  purchase: PriceData | null;
+  rental: PriceData | null;
+  loading: boolean;
+  error: string | null;
+  unsupportedCity: boolean;
+};
+
+const createEmptyOMIQuoteState = (): OMIQuoteState => ({
+  purchase: null,
+  rental: null,
+  loading: false,
+  error: null,
+  unsupportedCity: false,
+});
+
+interface OMIQuotePreviewProps {
+  state: OMIQuoteState;
+  city?: string;
+  surface?: number;
+  propertyTypeOMI?: string | null;
+  zonaOMI?: string | null;
+}
+
+function OMIQuotePreview({ state, city, surface, propertyTypeOMI, zonaOMI }: OMIQuotePreviewProps) {
+  const hasRequiredFields = Boolean(
+    city && city.trim().length > 0 &&
+      typeof surface === 'number' &&
+      Number.isFinite(surface) &&
+      surface > 0 &&
+      propertyTypeOMI &&
+      propertyTypeOMI.trim().length > 0 &&
+      zonaOMI &&
+      zonaOMI.trim().length > 0
+  );
+
+  if (!hasRequiredFields) {
+    return (
+      <div className="space-y-2 rounded-lg border bg-muted/20 p-4 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <Home className="h-5 w-5 text-muted-foreground" />
+          <span>Compila i campi OMI per visualizzare una stima indicativa dei prezzi di zona.</span>
+        </div>
+      </div>
+    );
+  }
+
+  const { loading, purchase, rental, error, unsupportedCity } = state;
+
+  const formatCurrency = (value?: number | null) => {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return '—';
+    }
+
+    return new Intl.NumberFormat('it-IT', {
+      style: 'currency',
+      currency: 'EUR',
+      maximumFractionDigits: value >= 1000 ? 0 : 2,
+    }).format(value);
+  };
+
+  const renderQuote = (label: string, data: PriceData | null) => {
+    if (!data) {
+      return (
+        <div className="rounded-md border bg-background p-4 text-sm text-muted-foreground">
+          Nessun dato disponibile per {label.toLowerCase()}.
+        </div>
+      );
+    }
+
+    return (
+      <div className="rounded-md border bg-background p-4">
+        <p className="text-sm font-medium text-muted-foreground">{label}</p>
+        <dl className="mt-3 grid grid-cols-3 gap-3 text-sm">
+          <div>
+            <dt className="text-xs uppercase tracking-wide text-muted-foreground">Min</dt>
+            <dd className="font-semibold">{formatCurrency(data.min)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs uppercase tracking-wide text-muted-foreground">Medio</dt>
+            <dd className="font-semibold">{formatCurrency(data.medio)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs uppercase tracking-wide text-muted-foreground">Max</dt>
+            <dd className="font-semibold">{formatCurrency(data.max)}</dd>
+          </div>
+        </dl>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-4 rounded-lg border bg-muted/20 p-4">
+      <div className="flex items-center gap-2">
+        <Home className="h-5 w-5 text-primary" />
+        <div>
+          <p className="text-sm font-semibold">Stima quotazioni OMI</p>
+          <p className="text-xs text-muted-foreground">
+            Valori indicativi per {city} · {zonaOMI}
+          </p>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>Caricamento quotazioni OMI in corso...</span>
+        </div>
+      ) : (
+        <>
+          {unsupportedCity && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Città non supportata</AlertTitle>
+              <AlertDescription>
+                Al momento non sono disponibili quotazioni OMI per <strong>{city}</strong>. La valutazione
+                procederà senza i dati ufficiali dell&apos;Osservatorio del Mercato Immobiliare.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {!unsupportedCity && error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Errore nel recupero dei dati OMI</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          {!unsupportedCity && !error && (
+            <>
+              {purchase || rental ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {purchase && renderQuote('Prezzi di acquisto', purchase)}
+                  {rental && renderQuote('Prezzi di affitto', rental)}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Nessuna quotazione disponibile per i parametri selezionati. Prova a modificare zona o tipologia.
+                </p>
+              )}
+            </>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
   const toNumber = (value: unknown): number | undefined => {
     if (value === null || value === undefined || value === '') {
@@ -223,6 +379,7 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [loadingSavedAnalysis, setLoadingSavedAnalysis] = useState(false);
   const [omiSuggestions, setOmiSuggestions] = useState<OMISuggestion | null>(null);
+  const [omiQuoteState, setOmiQuoteState] = useState<OMIQuoteState>(() => createEmptyOMIQuoteState());
   const attemptedSavedAnalysisId = useRef<string | null>(null);
 
   const photoStorageId = initialData?.photoStorageId;
@@ -437,6 +594,8 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
   const watchedDescription = watch('description');
   const watchedTitle = watch('title');
   const watchedPropertyType = watch('propertyType');
+  const watchedPropertyTypeOMI = watch('propertyTypeOMI');
+  const watchedZonaOMI = watch('zonaOMI');
   const propertyTypeDirty = Boolean((dirtyFields as { propertyType?: boolean }).propertyType);
 
   const pricePerSqmField = register('pricePerSqm', {
@@ -598,6 +757,91 @@ export function Step2CompleteData({ onNext, onBack, initialData }: Step2Props) {
     const timeoutId = setTimeout(fetchSuggestions, 1000);
     return () => clearTimeout(timeoutId);
   }, [watchedAddress, watchedCity, watchedDescription]);
+
+  useEffect(() => {
+    const city = typeof watchedCity === 'string' ? watchedCity.trim() : '';
+    const propertyTypeOMI = typeof watchedPropertyTypeOMI === 'string' ? watchedPropertyTypeOMI.trim() : '';
+    const zonaOMI = typeof watchedZonaOMI === 'string' ? watchedZonaOMI.trim() : '';
+    const surface =
+      typeof watchedSurface === 'number' && Number.isFinite(watchedSurface) && watchedSurface > 0
+        ? watchedSurface
+        : undefined;
+
+    if (!city || !surface || !propertyTypeOMI || !zonaOMI) {
+      setOmiQuoteState(createEmptyOMIQuoteState());
+      return;
+    }
+
+    let isActive = true;
+    const controller = new AbortController();
+
+    const timeoutId = setTimeout(async () => {
+      if (!isActive) {
+        return;
+      }
+
+      setOmiQuoteState({
+        purchase: null,
+        rental: null,
+        loading: true,
+        error: null,
+        unsupportedCity: false,
+      });
+
+      try {
+        const [purchase, rental] = await Promise.all([
+          getPurchasePrice({
+            city,
+            metri_quadri: surface,
+            tipo_immobile: propertyTypeOMI,
+            zona_omi: zonaOMI,
+            signal: controller.signal,
+          }),
+          getRentalPrice({
+            city,
+            metri_quadri: surface,
+            tipo_immobile: propertyTypeOMI,
+            zona_omi: zonaOMI,
+            signal: controller.signal,
+          }),
+        ]);
+
+        if (!isActive) {
+          return;
+        }
+
+        setOmiQuoteState({
+          purchase,
+          rental,
+          loading: false,
+          error: null,
+          unsupportedCity: false,
+        });
+      } catch (error) {
+        if (!isActive || controller.signal.aborted) {
+          return;
+        }
+
+        const message =
+          error instanceof Error ? error.message : 'Errore nel recupero quotazioni OMI';
+        const unsupportedCity = /non\s+supportat|not\s+supported/i.test(message);
+
+        setOmiQuoteState({
+          purchase: null,
+          rental: null,
+          loading: false,
+          error: message,
+          unsupportedCity,
+        });
+      }
+    }, 500);
+
+    return () => {
+      isActive = false;
+      controller.abort();
+      clearTimeout(timeoutId);
+    };
+  }, [watchedCity, watchedSurface, watchedPropertyTypeOMI, watchedZonaOMI]);
 
   const conditionScore = photoAnalysis ? Math.round(photoAnalysis.score) : 0;
   const conditionConfidence = photoAnalysis ? Math.round(photoAnalysis.confidence * 100) : 0;
@@ -1336,7 +1580,7 @@ const onSubmit = (data: PropertyFormData) => {
               control={control}
               render={({ field: zonaOMIField }) => (
                 <OMIDataFields
-                  city={useWatch({ control, name: 'city' })}
+                  city={watchedCity}
                   propertyTypeOMI={propertyTypeField.value}
                   zonaOMI={zonaOMIField.value}
                   onPropertyTypeChange={propertyTypeField.onChange}
@@ -1347,6 +1591,14 @@ const onSubmit = (data: PropertyFormData) => {
               )}
             />
           )}
+        />
+
+        <OMIQuotePreview
+          state={omiQuoteState}
+          city={watchedCity}
+          surface={watchedSurface}
+          propertyTypeOMI={watchedPropertyTypeOMI}
+          zonaOMI={watchedZonaOMI}
         />
 
         {/* Azioni */}
