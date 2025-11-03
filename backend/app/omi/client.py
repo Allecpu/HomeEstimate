@@ -1,16 +1,24 @@
-"""
-Client per le API OMI (Osservatorio del Mercato Immobiliare).
-"""
+"""Client per le API OMI (Osservatorio del Mercato Immobiliare)."""
 
 import asyncio
+import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, Iterable, List, Optional, Set, Tuple, Union
 
 import httpx
 from pydantic import BaseModel, Field
 
 from app.omi.cadastral_codes import get_cadastral_code
 from app.omi.property_types import PropertyType
+
+
+logger = logging.getLogger(__name__)
+
+PROPERTY_TYPE_VALUES = {prop_type.value for prop_type in PropertyType}
+
+
+class OMIServiceError(RuntimeError):
+    """Errore generato dal servizio di quotazioni OMI esterno."""
 
 
 class OMIQuotation(BaseModel):
@@ -132,55 +140,326 @@ class OMIClient:
         ]
         return "|".join(parts)
 
+    def _extract_data_container(self, payload: Union[Dict, List]) -> Union[Dict, List]:
+        """Estrae la sezione dati dalla risposta gestendo vari wrapper."""
+
+        current: Union[Dict, List, None] = payload
+        while isinstance(current, dict):
+            # Verifica errori espliciti nella risposta
+            if current.get("success") is False:
+                message = (
+                    current.get("message")
+                    or current.get("detail")
+                    or current.get("error")
+                    or "Servizio OMI ha restituito un errore"
+                )
+                raise OMIServiceError(str(message))
+
+            for key in ("error", "errors"):
+                if key in current and current[key]:
+                    raise OMIServiceError(str(current[key]))
+
+            # Naviga nei wrapper comuni
+            for key in ("data", "result", "results", "payload", "response"):
+                nested = current.get(key)
+                if isinstance(nested, (dict, list)):
+                    current = nested
+                    break
+            else:
+                return current
+
+        if current is None:
+            raise OMIServiceError("Risposta vuota dal servizio OMI")
+
+        return current
+
+    def _extract_error_message(self, response: httpx.Response) -> Optional[str]:
+        """Estrae un messaggio d'errore significativo dalla risposta HTTP."""
+
+        text_snippet: Optional[str] = None
+        try:
+            data = response.json()
+        except ValueError:
+            text_snippet = response.text.strip()
+        else:
+            if isinstance(data, dict):
+                for key in ("detail", "message", "error", "errors", "reason"):
+                    value = data.get(key)
+                    if value:
+                        return str(value)
+            text_snippet = response.text.strip()
+
+        return text_snippet[:200] if text_snippet else None
+
+    @staticmethod
+    def _to_float(value: Union[str, int, float, None]) -> Optional[float]:
+        """Converte un valore numerico generico in float."""
+
+        if value is None:
+            return None
+
+        if isinstance(value, (int, float)):
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return None
+
+        if isinstance(value, str):
+            cleaned = value.replace(".", "").replace(",", ".").strip()
+            if not cleaned:
+                return None
+            try:
+                return float(cleaned)
+            except ValueError:
+                return None
+
+        return None
+
+    @staticmethod
+    def _normalise_property_type(raw_value: Optional[str], fallback: Optional[str] = None) -> Optional[str]:
+        """Normalizza il valore del tipo immobile in snake_case."""
+
+        if not raw_value:
+            return fallback
+
+        candidate = raw_value.strip()
+        if not candidate:
+            return fallback
+
+        slug = candidate.lower().replace(" ", "_")
+        if slug in PROPERTY_TYPE_VALUES:
+            return slug
+
+        # Alcune risposte usano maiuscole/misti o includono caratteri extra
+        slug = "".join(ch if ch.isalnum() else "_" for ch in candidate).lower()
+        while "__" in slug:
+            slug = slug.replace("__", "_")
+        slug = slug.strip("_")
+        return slug or fallback
+
+    def _parse_price_block(self, block: Dict[str, Union[str, int, float, Dict]]) -> Dict[str, Optional[float]]:
+        """Estrae valori min/medio/max da un blocco di prezzo annidato."""
+
+        target = block
+        for key in ("values", "value", "range", "dati"):
+            nested = target.get(key)
+            if isinstance(nested, dict):
+                target = nested
+                break
+
+        return {
+            "min": self._to_float(
+                target.get("min")
+                or target.get("minimo")
+                or target.get("minimum")
+                or target.get("prezzo_min")
+                or target.get("valore_min")
+            ),
+            "max": self._to_float(
+                target.get("max")
+                or target.get("massimo")
+                or target.get("maximum")
+                or target.get("prezzo_max")
+                or target.get("valore_max")
+            ),
+            "medio": self._to_float(
+                target.get("medio")
+                or target.get("mediano")
+                or target.get("mean")
+                or target.get("media")
+                or target.get("valore_medio")
+            ),
+        }
+
+    def _extract_price_fields(self, payload: Dict[str, object]) -> Optional[Dict[str, Optional[float]]]:
+        """Identifica i campi di prezzo all'interno di un dizionario."""
+
+        price_data: Dict[str, Optional[float]] = {}
+        has_values = False
+
+        direct_fields = {
+            "prezzo_acquisto_min": "prezzo_acquisto_min",
+            "prezzo_acquisto_max": "prezzo_acquisto_max",
+            "prezzo_acquisto_medio": "prezzo_acquisto_medio",
+            "prezzo_affitto_min": "prezzo_affitto_min",
+            "prezzo_affitto_max": "prezzo_affitto_max",
+            "prezzo_affitto_medio": "prezzo_affitto_medio",
+        }
+
+        for key, output_key in direct_fields.items():
+            if key in payload and payload[key] is not None:
+                price_data[output_key] = self._to_float(payload[key])
+                has_values = True
+
+        def first_dict(keys: Iterable[str]) -> Optional[Dict]:
+            for key in keys:
+                value = payload.get(key)
+                if isinstance(value, dict):
+                    return value
+            return None
+
+        if not has_values:
+            acquisto_block = first_dict(
+                (
+                    "prezzo_acquisto",
+                    "prezzoAcquisto",
+                    "acquisto",
+                    "vendita",
+                    "purchase",
+                    "compravenita",
+                )
+            )
+            if acquisto_block:
+                block_values = self._parse_price_block(acquisto_block)
+                price_data["prezzo_acquisto_min"] = block_values.get("min")
+                price_data["prezzo_acquisto_max"] = block_values.get("max")
+                price_data["prezzo_acquisto_medio"] = block_values.get("medio")
+                has_values = has_values or any(block_values.values())
+
+        affitto_block = first_dict(("prezzo_affitto", "affitto", "locazione", "rent", "rental"))
+        if affitto_block:
+            block_values = self._parse_price_block(affitto_block)
+            price_data["prezzo_affitto_min"] = block_values.get("min")
+            price_data["prezzo_affitto_max"] = block_values.get("max")
+            price_data["prezzo_affitto_medio"] = block_values.get("medio")
+            has_values = True if any(block_values.values()) else has_values
+
+        if not has_values:
+            prezzo_block = first_dict(("prezzo", "prices", "valori"))
+            if prezzo_block:
+                acquisto = None
+                affitto = None
+                if isinstance(prezzo_block, dict):
+                    acquisto = prezzo_block.get("acquisto") or prezzo_block.get("vendita") or prezzo_block.get("purchase")
+                    affitto = prezzo_block.get("affitto") or prezzo_block.get("locazione") or prezzo_block.get("rental")
+
+                if isinstance(acquisto, dict):
+                    block_values = self._parse_price_block(acquisto)
+                    price_data["prezzo_acquisto_min"] = block_values.get("min")
+                    price_data["prezzo_acquisto_max"] = block_values.get("max")
+                    price_data["prezzo_acquisto_medio"] = block_values.get("medio")
+                    has_values = has_values or any(block_values.values())
+
+                if isinstance(affitto, dict):
+                    block_values = self._parse_price_block(affitto)
+                    price_data["prezzo_affitto_min"] = block_values.get("min")
+                    price_data["prezzo_affitto_max"] = block_values.get("max")
+                    price_data["prezzo_affitto_medio"] = block_values.get("medio")
+                    has_values = True if any(block_values.values()) else has_values
+
+        if not has_values:
+            return None
+
+        price_data["stato"] = (
+            payload.get("stato_di_conservazione_mediano_della_zona")
+            or payload.get("stato_di_conservazione")
+            or payload.get("stato_conservazione")
+            or payload.get("conservazione")
+            or payload.get("condition")
+            or payload.get("stato")
+        )
+        return price_data
+
+    def _collect_quotations(
+        self,
+        payload: Union[Dict, List],
+        zona_omi_filter: Optional[str],
+        tipo_immobile_filter: Optional[PropertyType],
+    ) -> Tuple[List[OMIQuotation], Set[str]]:
+        """Estrae le quotazioni dalla struttura JSON dell'API."""
+
+        quotations: List[OMIQuotation] = []
+        zones_found: Set[str] = set()
+        visited: Set[int] = set()
+
+        def visit(node: Union[Dict, List, str, int, float, None], zone: Optional[str], prop_type: Optional[str]) -> None:
+            if node is None or isinstance(node, (str, int, float)):
+                return
+
+            node_id = id(node)
+            if node_id in visited:
+                return
+            visited.add(node_id)
+
+            current_zone = zone
+            current_type = prop_type
+
+            if isinstance(node, dict):
+                for key in ("zona_omi", "zona", "zonaOMI", "zonaOmi", "zone", "codice_zona", "codiceZona"):
+                    value = node.get(key)
+                    if isinstance(value, str) and value.strip():
+                        current_zone = value.strip()
+                        break
+
+                for key in ("property_type", "tipo", "categoria", "category", "destinazione"):
+                    value = node.get(key)
+                    if isinstance(value, str) and value.strip():
+                        current_type = self._normalise_property_type(value, current_type)
+                        break
+
+                price_fields = self._extract_price_fields(node)
+                if price_fields and current_zone:
+                    zones_found.add(current_zone)
+                    normalized_type = self._normalise_property_type(current_type, current_type)
+                    quotation = OMIQuotation(
+                        zona_omi=current_zone,
+                        property_type=normalized_type or "sconosciuto",
+                        stato_conservazione=price_fields.get("stato"),
+                        prezzo_acquisto_min=price_fields.get("prezzo_acquisto_min"),
+                        prezzo_acquisto_max=price_fields.get("prezzo_acquisto_max"),
+                        prezzo_acquisto_medio=price_fields.get("prezzo_acquisto_medio"),
+                        prezzo_affitto_min=price_fields.get("prezzo_affitto_min"),
+                        prezzo_affitto_max=price_fields.get("prezzo_affitto_max"),
+                        prezzo_affitto_medio=price_fields.get("prezzo_affitto_medio"),
+                    )
+                    quotations.append(quotation)
+
+                for key, value in node.items():
+                    if key in {
+                        "zona_omi",
+                        "zona",
+                        "zonaOMI",
+                        "zonaOmi",
+                        "zone",
+                        "codice_zona",
+                        "codiceZona",
+                        "property_type",
+                        "tipo",
+                        "categoria",
+                        "category",
+                        "destinazione",
+                    }:
+                        continue
+                    visit(value, current_zone, current_type)
+
+            elif isinstance(node, list):
+                for item in node:
+                    visit(item, current_zone, current_type)
+
+        visit(payload, None, None)
+
+        if zona_omi_filter:
+            quotations = [q for q in quotations if q.zona_omi == zona_omi_filter]
+        if tipo_immobile_filter:
+            quotations = [q for q in quotations if q.property_type == tipo_immobile_filter.value]
+
+        return quotations, zones_found
+
     def _parse_api_response(
         self,
-        data: Dict,
+        data: Union[Dict, List],
         codice_comune: str,
         comune: str,
         metri_quadri: float,
         zona_omi_filter: Optional[str],
         tipo_immobile_filter: Optional[PropertyType],
     ) -> OMIResponse:
-        """
-        Parsa la risposta API nel formato corretto.
+        """Parsa la risposta API in un oggetto ``OMIResponse``."""
 
-        La struttura dell'API è:
-        {
-            "B12": {
-                "abitazioni_civili": {...},
-                "negozi": {...},
-                ...
-            },
-            "B13": {...},
-            ...
-        }
-        """
-        quotations = []
-
-        for zona_code, zone_data in data.items():
-            # Se è specificato un filtro zona, salta le altre zone
-            if zona_omi_filter and zona_code != zona_omi_filter:
-                continue
-
-            if isinstance(zone_data, dict):
-                for prop_type, prop_data in zone_data.items():
-                    # Se è specificato un filtro tipo, salta gli altri tipi
-                    if tipo_immobile_filter and prop_type != tipo_immobile_filter.value:
-                        continue
-
-                    if isinstance(prop_data, dict):
-                        quotation = OMIQuotation(
-                            zona_omi=zona_code,
-                            property_type=prop_type,
-                            stato_conservazione=prop_data.get("stato_di_conservazione_mediano_della_zona"),
-                            prezzo_acquisto_min=prop_data.get("prezzo_acquisto_min"),
-                            prezzo_acquisto_max=prop_data.get("prezzo_acquisto_max"),
-                            prezzo_acquisto_medio=prop_data.get("prezzo_acquisto_medio"),
-                            prezzo_affitto_min=prop_data.get("prezzo_affitto_min"),
-                            prezzo_affitto_max=prop_data.get("prezzo_affitto_max"),
-                            prezzo_affitto_medio=prop_data.get("prezzo_affitto_medio"),
-                        )
-                        quotations.append(quotation)
+        cleaned_payload = self._extract_data_container(data)
+        quotations, zones_found = self._collect_quotations(
+            cleaned_payload, zona_omi_filter, tipo_immobile_filter
+        )
 
         return OMIResponse(
             codice_comune=codice_comune,
@@ -188,7 +467,7 @@ class OMIClient:
             metri_quadri=metri_quadri,
             zona_omi_filter=zona_omi_filter,
             quotations=quotations,
-            zone_count=len(data),
+            zone_count=len(zones_found) if zones_found else len({q.zona_omi for q in quotations}),
         )
 
     async def query(
@@ -199,7 +478,7 @@ class OMIClient:
         zona_omi: Optional[str] = None,
         tipo_immobile: Optional[PropertyType] = None,
         use_cache: bool = True,
-    ) -> Optional[OMIResponse]:
+    ) -> OMIResponse:
         """
         Interroga le API OMI per ottenere le quotazioni immobiliari.
 
@@ -212,10 +491,11 @@ class OMIClient:
             use_cache: Usa la cache se disponibile
 
         Returns:
-            OMIResponse con le quotazioni o None se errore
+            OMIResponse con le quotazioni
 
         Raises:
             ValueError: Se il comune non è trovato
+            OMIServiceError: Se il servizio OMI restituisce un errore
         """
         codice_comune = get_cadastral_code(city)
         if not codice_comune:
@@ -247,36 +527,48 @@ class OMIClient:
             # Rispetta il rate limiting
             await self._wait_for_rate_limit()
 
-            # Esegui la richiesta
             client = await self._get_client()
             response = await client.get(self.BASE_URL, params=params)
             response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            message = self._extract_error_message(exc.response)
+            logger.warning(
+                "Errore HTTP dal servizio OMI (%s): %s",
+                exc.response.status_code,
+                message,
+            )
+            raise OMIServiceError(
+                message or f"Errore HTTP {exc.response.status_code} dal servizio OMI"
+            ) from exc
+        except httpx.HTTPError as exc:
+            logger.warning("Errore di rete verso il servizio OMI: %s", exc)
+            raise OMIServiceError(str(exc)) from exc
 
-            # Parsa la risposta
+        try:
             data = response.json()
+        except ValueError as exc:
+            text = response.text.strip()
+            logger.error("Risposta non valida dal servizio OMI: %s", text[:200])
+            raise OMIServiceError("Risposta non valida dal servizio OMI") from exc
 
-            # Crea la risposta parsata
-            omi_response = self._parse_api_response(
-                data=data,
-                codice_comune=codice_comune,
-                comune=city.title(),
-                metri_quadri=metri_quadri,
-                zona_omi_filter=zona_omi,
-                tipo_immobile_filter=tipo_immobile,
+        omi_response = self._parse_api_response(
+            data=data,
+            codice_comune=codice_comune,
+            comune=city.title(),
+            metri_quadri=metri_quadri,
+            zona_omi_filter=zona_omi,
+            tipo_immobile_filter=tipo_immobile,
+        )
+
+        if not omi_response.quotations:
+            raise OMIServiceError(
+                "Nessuna quotazione disponibile per i parametri richiesti"
             )
 
-            # Salva in cache
-            if use_cache:
-                self._cache.set(cache_key, omi_response)
+        if use_cache:
+            self._cache.set(cache_key, omi_response)
 
-            return omi_response
-
-        except httpx.HTTPError as e:
-            print(f"Errore HTTP durante la richiesta OMI: {e}")
-            return None
-        except Exception as e:
-            print(f"Errore imprevisto durante la richiesta OMI: {e}")
-            return None
+        return omi_response
 
     async def get_purchase_price(
         self,
@@ -306,8 +598,10 @@ class OMIClient:
             tipo_immobile=tipo_immobile,
         )
 
-        if not response or not response.quotations:
-            return None
+        if not response.quotations:
+            raise OMIServiceError(
+                "Quotazioni di acquisto non disponibili per i parametri indicati"
+            )
 
         # Cerca la quotazione per il tipo richiesto o prendi la prima disponibile
         quotation = response.quotations[0]
@@ -316,6 +610,17 @@ class OMIClient:
                 if q.property_type == tipo_immobile.value:
                     quotation = q
                     break
+
+        if not any(
+            (
+                quotation.prezzo_acquisto_min,
+                quotation.prezzo_acquisto_medio,
+                quotation.prezzo_acquisto_max,
+            )
+        ):
+            raise OMIServiceError(
+                "Il servizio OMI non ha restituito valori di acquisto per i parametri indicati"
+            )
 
         # Converti in prezzi al mq totali per i metri quadri richiesti
         return {
@@ -355,8 +660,10 @@ class OMIClient:
             tipo_immobile=tipo_immobile,
         )
 
-        if not response or not response.quotations:
-            return None
+        if not response.quotations:
+            raise OMIServiceError(
+                "Quotazioni di affitto non disponibili per i parametri indicati"
+            )
 
         # Cerca la quotazione per il tipo richiesto o prendi la prima disponibile
         quotation = response.quotations[0]
@@ -365,6 +672,17 @@ class OMIClient:
                 if q.property_type == tipo_immobile.value:
                     quotation = q
                     break
+
+        if not any(
+            (
+                quotation.prezzo_affitto_min,
+                quotation.prezzo_affitto_medio,
+                quotation.prezzo_affitto_max,
+            )
+        ):
+            raise OMIServiceError(
+                "Il servizio OMI non ha restituito valori di affitto per i parametri indicati"
+            )
 
         # Converti in canoni mensili totali per i metri quadri richiesti
         return {
