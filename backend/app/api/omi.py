@@ -1,7 +1,6 @@
-"""
-API endpoints per l'interrogazione diretta dei dati OMI.
-"""
+"""API endpoints per l'interrogazione diretta dei dati OMI."""
 
+import logging
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -10,6 +9,7 @@ from pydantic import BaseModel, Field
 from app.omi import (
     OMIQuotation,
     OMIResponse,
+    OMIServiceError,
     PropertyType,
     get_all_cities,
     get_cadastral_code,
@@ -19,6 +19,8 @@ from app.omi import (
 )
 
 router = APIRouter()
+
+logger = logging.getLogger(__name__)
 
 
 class OMIQueryRequest(BaseModel):
@@ -89,21 +91,19 @@ async def query_omi(request: OMIQueryRequest):
             tipo_immobile=property_type,
         )
 
-        if not response:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Dati OMI non trovati per il comune: {request.city}"
-            )
-
         return response
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except OMIServiceError as e:
+        logger.warning("Errore servizio OMI per query %s: %s", request.city, e)
+        detail = "Servizio quotazioni OMI temporaneamente non disponibile. Riprova più tardi."
+        if str(e):
+            detail += f" Dettagli: {e}"
+        raise HTTPException(status_code=502, detail=detail)
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Errore durante la query OMI: {str(e)}"
-        )
+        logger.exception("Errore imprevisto durante la query OMI per %s", request.city)
+        raise HTTPException(status_code=500, detail="Errore durante la query OMI")
 
 
 @router.get("/purchase-price")
@@ -139,21 +139,19 @@ async def get_purchase_price(
             zona_omi=zona_omi,
         )
 
-        if not prices:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Prezzi di acquisto non trovati per {city}"
-            )
-
         return prices
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except OMIServiceError as e:
+        logger.warning("Errore servizio OMI per prezzi acquisto %s: %s", city, e)
+        detail = "Servizio quotazioni OMI temporaneamente non disponibile. Riprova più tardi."
+        if str(e):
+            detail += f" Dettagli: {e}"
+        raise HTTPException(status_code=502, detail=detail)
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Errore: {str(e)}"
-        )
+        logger.exception("Errore imprevisto nel recupero prezzi acquisto per %s", city)
+        raise HTTPException(status_code=500, detail="Errore durante il recupero prezzi OMI")
 
 
 @router.get("/rental-price")
@@ -189,21 +187,19 @@ async def get_rental_price(
             zona_omi=zona_omi,
         )
 
-        if not prices:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Prezzi di affitto non trovati per {city}"
-            )
-
         return prices
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except OMIServiceError as e:
+        logger.warning("Errore servizio OMI per prezzi affitto %s: %s", city, e)
+        detail = "Servizio quotazioni OMI temporaneamente non disponibile. Riprova più tardi."
+        if str(e):
+            detail += f" Dettagli: {e}"
+        raise HTTPException(status_code=502, detail=detail)
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Errore: {str(e)}"
-        )
+        logger.exception("Errore imprevisto nel recupero prezzi affitto per %s", city)
+        raise HTTPException(status_code=500, detail="Errore durante il recupero prezzi OMI")
 
 
 @router.get("/property-types", response_model=List[PropertyTypeInfo])
