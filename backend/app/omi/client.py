@@ -21,6 +21,10 @@ class OMIServiceError(RuntimeError):
     """Errore generato dal servizio di quotazioni OMI esterno."""
 
 
+class OMINoQuotationsError(RuntimeError):
+    """Segnala che non sono disponibili quotazioni per i parametri richiesti."""
+
+
 class OMIQuotation(BaseModel):
     """Quotazione OMI per un tipo di immobile in una zona."""
 
@@ -560,11 +564,6 @@ class OMIClient:
             tipo_immobile_filter=tipo_immobile,
         )
 
-        if not omi_response.quotations:
-            raise OMIServiceError(
-                "Nessuna quotazione disponibile per i parametri richiesti"
-            )
-
         if use_cache:
             self._cache.set(cache_key, omi_response)
 
@@ -599,7 +598,7 @@ class OMIClient:
         )
 
         if not response.quotations:
-            raise OMIServiceError(
+            raise OMINoQuotationsError(
                 "Quotazioni di acquisto non disponibili per i parametri indicati"
             )
 
@@ -618,7 +617,7 @@ class OMIClient:
                 quotation.prezzo_acquisto_max,
             )
         ):
-            raise OMIServiceError(
+            raise OMINoQuotationsError(
                 "Il servizio OMI non ha restituito valori di acquisto per i parametri indicati"
             )
 
@@ -661,7 +660,7 @@ class OMIClient:
         )
 
         if not response.quotations:
-            raise OMIServiceError(
+            raise OMINoQuotationsError(
                 "Quotazioni di affitto non disponibili per i parametri indicati"
             )
 
@@ -680,7 +679,7 @@ class OMIClient:
                 quotation.prezzo_affitto_max,
             )
         ):
-            raise OMIServiceError(
+            raise OMINoQuotationsError(
                 "Il servizio OMI non ha restituito valori di affitto per i parametri indicati"
             )
 

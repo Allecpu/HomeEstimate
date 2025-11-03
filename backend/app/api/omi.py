@@ -10,6 +10,7 @@ from app.omi import (
     OMIQuotation,
     OMIResponse,
     OMIServiceError,
+    OMINoQuotationsError,
     PropertyType,
     get_all_cities,
     get_cadastral_code,
@@ -143,6 +144,8 @@ async def get_purchase_price(
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except OMINoQuotationsError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except OMIServiceError as e:
         logger.warning("Errore servizio OMI per prezzi acquisto %s: %s", city, e)
         detail = "Servizio quotazioni OMI temporaneamente non disponibile. Riprova più tardi."
@@ -191,6 +194,8 @@ async def get_rental_price(
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except OMINoQuotationsError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except OMIServiceError as e:
         logger.warning("Errore servizio OMI per prezzi affitto %s: %s", city, e)
         detail = "Servizio quotazioni OMI temporaneamente non disponibile. Riprova più tardi."
