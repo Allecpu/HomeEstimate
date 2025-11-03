@@ -13,6 +13,8 @@ from app.omi.client import (
     OMIClient,
     OMIQuotation,
     OMIResponse,
+    OMINoQuotationsError,
+    OMIServiceError,
     get_omi_client,
 )
 from app.omi.property_types import (
@@ -37,6 +39,8 @@ __all__ = [
     "OMIClient",
     "OMIQuotation",
     "OMIResponse",
+    "OMIServiceError",
+    "OMINoQuotationsError",
     "get_omi_client",
     # Property types
     "PropertyType",
